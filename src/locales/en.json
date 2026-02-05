@@ -1,0 +1,71 @@
+{
+  "card": {
+    "title": "TP-Link Router Clients",
+    "subtitle": "Router: {name}",
+    "selectRouter": "Select a TP-Link router in card settings.",
+    "noDevices": "No devices found for this router.",
+    "devicesCount": "{count} devices",
+    "onlineCount": "{online}/{total} online",
+    "searchPlaceholder": "Search (name, IP, MAC, host)",
+    "routerNotSelected": "Router not selected",
+    "routerLabel": "Router",
+    "cpuUsage": "CPU usage: {value}",
+    "memUsage": "Memory usage: {value}"
+  },
+  "filters": {
+    "all": "All",
+    "band2": "2G",
+    "band5": "5G",
+    "band6": "6G",
+    "wifi": "WiFi",
+    "wired": "Wired",
+    "iot": "IoT",
+    "guest": "Guest",
+    "online": "Online",
+    "offline": "Offline"
+  },
+  "columns": {
+    "name": "Name",
+    "status": "Status",
+    "connection": "Connection",
+    "band": "Band",
+    "ip": "IP",
+    "mac": "MAC",
+    "hostname": "Hostname",
+    "packetsSent": "Packets Sent",
+    "packetsReceived": "Packets Received",
+    "up": "Up",
+    "down": "Down",
+    "tx": "TX",
+    "rx": "RX",
+    "online": "Online",
+    "traffic": "Traffic",
+    "signal": "Signal"
+  },
+  "status": {
+    "online": "Online",
+    "offline": "Offline"
+  },
+  "editor": {
+    "title": "Card Title",
+    "router": "TP-Link Router",
+    "routerPlaceholder": "Select router",
+    "speedUnit": "Speed Unit (Up/Down)",
+    "speedMBps": "MB/s (default)",
+    "speedMbps": "Mbps",
+    "columns": "Visible Columns",
+    "columnsHelp": "Name column is always visible. Order follows your selection order."
+  },
+  "actions": {
+    "wifi": "WiFi",
+    "guest": "Guest",
+    "iot": "IoT",
+    "reboot": "Reboot",
+    "router": "Router",
+    "holdHint": "Hold {seconds}s",
+    "holdWithLabel": "{label} (hold {seconds}s)"
+  },
+  "errors": {
+    "lists": "Could not load lists. Admin rights may be required."
+  }
+}

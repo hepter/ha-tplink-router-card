@@ -1,0 +1,71 @@
+{
+  "card": {
+    "title": "TP-Link Router Cihazları",
+    "subtitle": "Router: {name}",
+    "selectRouter": "Kart ayarlarından bir TP-Link router seçin.",
+    "noDevices": "Bu router için kayıtlı cihaz bulunamadı.",
+    "devicesCount": "{count} cihaz",
+    "onlineCount": "{online}/{total} online",
+    "searchPlaceholder": "Ara (isim, IP, MAC, host)",
+    "routerNotSelected": "Router seçilmedi",
+    "routerLabel": "Router",
+    "cpuUsage": "CPU kullanımı: {value}",
+    "memUsage": "Bellek kullanımı: {value}"
+  },
+  "filters": {
+    "all": "Tümü",
+    "band2": "2G",
+    "band5": "5G",
+    "band6": "6G",
+    "wifi": "WiFi",
+    "wired": "Kablolu",
+    "iot": "IoT",
+    "guest": "Misafir",
+    "online": "Çevrimiçi",
+    "offline": "Çevrimdışı"
+  },
+  "columns": {
+    "name": "Ad",
+    "status": "Durum",
+    "connection": "Bağlantı",
+    "band": "Band",
+    "ip": "IP",
+    "mac": "MAC",
+    "hostname": "Cihaz Adı",
+    "packetsSent": "Gönderilen Paket",
+    "packetsReceived": "Alınan Paket",
+    "up": "Yükleme",
+    "down": "İndirme",
+    "tx": "TX",
+    "rx": "RX",
+    "online": "Online Süre",
+    "traffic": "Trafik",
+    "signal": "Sinyal"
+  },
+  "status": {
+    "online": "Çevrimiçi",
+    "offline": "Çevrimdışı"
+  },
+  "editor": {
+    "title": "Kart Başlığı",
+    "router": "TP-Link Router",
+    "routerPlaceholder": "Router seçin",
+    "speedUnit": "Hız Birimi (Up/Down)",
+    "speedMBps": "MB/s (varsayılan)",
+    "speedMbps": "Mbps",
+    "columns": "Görünen Sütunlar",
+    "columnsHelp": "Ad sütunu her zaman görünür. Seçim sırası kolon sırası olur."
+  },
+  "actions": {
+    "wifi": "WiFi",
+    "guest": "Misafir",
+    "iot": "IoT",
+    "reboot": "Yeniden Başlat",
+    "router": "Router",
+    "holdHint": "{seconds} sn basılı tut",
+    "holdWithLabel": "{label} ({seconds} sn basılı tut)"
+  },
+  "errors": {
+    "lists": "Veri listeleri alınamadı. Yönetici yetkisi gerekebilir."
+  }
+}

@@ -1,0 +1,23 @@
+{
+  "name": "ha-tplink-router-card",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "Lovelace card for TP-Link Router (tplink_router) integration",
+  "scripts": {
+    "build": "vite build",
+    "dev": "vite build --watch",
+    "test": "vitest run",
+    "format": "prettier --write \"src/**/*.{ts,js}\" \"*.{md,json}\"",
+    "format:check": "prettier --check \"src/**/*.{ts,js}\" \"*.{md,json}\""
+  },
+  "dependencies": {
+    "lit": "^3.2.0"
+  },
+  "devDependencies": {
+    "prettier": "^3.3.3",
+    "typescript": "^5.5.4",
+    "vite": "^5.4.8",
+    "vitest": "^2.1.1"
+  }
+}
