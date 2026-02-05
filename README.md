@@ -2,6 +2,10 @@
 
 Lovelace custom card for the `tplink_router` integration. It lists router clients in a fast, sortable table and adds router controls/insights in a compact header.
 
+[![hacs_badge](https://img.shields.io/badge/HACS-Custom-orange.svg)](https://github.com/custom-components/hacs)
+[![GitHub Release](https://img.shields.io/github/release/hepter/ha-tplink-router-card.svg)](https://github.com/hepter/ha-tplink-router-card/releases)
+[![License](https://img.shields.io/github/license/hepter/ha-tplink-router-card.svg)](LICENSE)
+
 ![Add card dialog](card-config.png)
 
 ![Card screenshot](card.png)
@@ -120,3 +124,13 @@ Notes:
 ## Troubleshooting
 - If router entries are missing, ensure you have admin rights (entity registry WS calls require it).
 - If router info tooltip is empty, the integration might not expose device metadata. The card falls back gracefully.
+
+## Contributing
+Contributions are welcome. Please see `CONTRIBUTING.md` for guidelines and local setup.
+
+## Credits
+- TP-Link Router integration by AlexandrErohin (data source): https://github.com/AlexandrErohin/home-assistant-tplink-router
+- Home Assistant community and UI framework.
+
+## License
+MIT. See `LICENSE` for details.
