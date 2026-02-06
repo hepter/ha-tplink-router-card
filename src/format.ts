@@ -42,11 +42,17 @@ export const normalizeMbps = (value?: number | null) => {
   return value; // assume already Mbps
 };
 
-export const normalizeLinkMbps = (value?: number | null) => {
+export const normalizeLinkMbps = (
+  value?: number | null,
+  band?: "2g" | "5g" | "6g" | "unknown",
+) => {
   if (value === null || value === undefined || !Number.isFinite(value)) return null;
   const abs = Math.abs(value);
   if (abs >= 10_000_000) return value / 1_000_000; // assume bps
   if (abs >= 10_000) return value / 1_000; // assume Kbps
+  if (abs >= 5_000 && abs < 10_000 && band && band !== "6g") {
+    return value / 1_000; // high but plausible Kbps for 2G/5G/unknown
+  }
   return value; // assume already Mbps (link rate often reported as Mbps)
 };
 
@@ -92,8 +98,11 @@ export const formatMbps = (value?: number | null) => {
   return `${mbps.toFixed(decimals)} Mbps`;
 };
 
-export const formatLinkSpeed = (value?: number | null) => {
-  const mbps = normalizeLinkMbps(value);
+export const formatLinkSpeed = (
+  value?: number | null,
+  band?: "2g" | "5g" | "6g" | "unknown",
+) => {
+  const mbps = normalizeLinkMbps(value, band);
   if (mbps === null) return "—";
   const decimals = mbps >= 100 ? 0 : mbps >= 10 ? 1 : 2;
   return `${mbps.toFixed(decimals)} Mbps`;

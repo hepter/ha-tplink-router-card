@@ -395,6 +395,7 @@ export class TplinkRouterCard extends LitElement {
       const statusColor = isOnline ? "#3aa45b" : "#9aa0a6";
       const connection = safeString(attrs.connection ?? "—");
       const band = safeString(attrs.band ?? "—");
+      const bandType = normalizeBand(band);
       const ip = safeString(attrs.ip ?? attrs.ip_address ?? attrs.ipaddr ?? "—");
       const mac = safeString(attrs.mac ?? attrs.mac_address ?? attrs.macaddr ?? "—");
       const hostname = safeString(attrs.host_name ?? attrs.hostname ?? attrs.host ?? "—");
@@ -407,8 +408,8 @@ export class TplinkRouterCard extends LitElement {
       const rxRateRaw = toNumber(attrs.rx_rate);
       const upSpeedValue = normalizeMbps(upSpeedRaw);
       const downSpeedValue = normalizeMbps(downSpeedRaw);
-      const txRateValue = normalizeLinkMbps(txRateRaw);
-      const rxRateValue = normalizeLinkMbps(rxRateRaw);
+      const txRateValue = normalizeLinkMbps(txRateRaw, bandType);
+      const rxRateValue = normalizeLinkMbps(rxRateRaw, bandType);
       const onlineTimeValue = toNumber(attrs.online_time);
       const trafficUsageValue = toNumber(attrs.traffic_usage);
       const signalValue = toNumber(attrs.signal);
@@ -424,7 +425,7 @@ export class TplinkRouterCard extends LitElement {
         connection,
         connectionType: normalizeConnection(connection),
         band,
-        bandType: normalizeBand(band),
+        bandType,
         ip,
         mac,
         hostname,
@@ -436,9 +437,9 @@ export class TplinkRouterCard extends LitElement {
         upSpeedValue,
         downSpeed: formatSpeed(downSpeedRaw, this._config?.speed_unit ?? "MBps"),
         downSpeedValue,
-        txRate: formatLinkSpeed(txRateRaw),
+        txRate: formatLinkSpeed(txRateRaw, bandType),
         txRateValue,
-        rxRate: formatLinkSpeed(rxRateRaw),
+        rxRate: formatLinkSpeed(rxRateRaw, bandType),
         rxRateValue,
         onlineTime: formatDuration(onlineTimeValue),
         onlineTimeValue,

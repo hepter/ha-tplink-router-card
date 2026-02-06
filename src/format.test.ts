@@ -43,6 +43,9 @@ describe("format helpers", () => {
     expect(normalizeLinkMbps(1630)).toBe(1630);
     expect(normalizeLinkMbps(1441170)).toBeCloseTo(1441.17, 2);
     expect(normalizeLinkMbps(1_600_000_000)).toBeCloseTo(1600, 1);
+    expect(normalizeLinkMbps(6500, "5g")).toBeCloseTo(6.5, 1);
+    expect(normalizeLinkMbps(6500, "6g")).toBe(6500);
+    expect(normalizeLinkMbps(6000, "2g")).toBeCloseTo(6, 1);
   });
 
   it("formats speed output unit", () => {
@@ -52,6 +55,8 @@ describe("format helpers", () => {
 
   it("formats link speed", () => {
     expect(formatLinkSpeed(1630)).toBe("1630 Mbps");
+    expect(formatLinkSpeed(6500, "5g")).toBe("6.50 Mbps");
+    expect(formatLinkSpeed(6000, "2g")).toBe("6.00 Mbps");
   });
 
   it("formats bits", () => {
