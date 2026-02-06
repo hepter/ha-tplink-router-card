@@ -1,6 +1,8 @@
 import "./card";
 
-const VERSION = "0.3.0";
+const VERSION =
+  import.meta.env.VITE_CARD_VERSION ??
+  "dev";
 
 interface CustomCardEntry {
   type: string;
