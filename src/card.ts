@@ -41,6 +41,17 @@ const signalColor = (dbm: number | null) => {
   return "var(--signal-excellent)";
 };
 
+const rateClass = (mbps: number | null) => {
+  if (mbps === null || !Number.isFinite(mbps)) return "rate--na";
+  if (mbps < 10) return "rate--bad";
+  if (mbps < 30) return "rate--poor";
+  if (mbps < 100) return "rate--fair";
+  if (mbps < 300) return "rate--good";
+  if (mbps < 1000) return "rate--great";
+  if (mbps < 2000) return "rate--excellent";
+  return "rate--ultra";
+};
+
 type SortDirection = "asc" | "desc";
 type SortState = { key: string; direction: SortDirection };
 type FilterState = {
@@ -190,6 +201,7 @@ export class TplinkRouterCard extends LitElement {
   private _loaded = false;
   private _registryFailed = false;
   private _deviceRegistry: DeviceRegistryEntry[] = [];
+  private _filtersLoaded = false;
 
   setConfig(config: TplinkRouterCardConfig): void {
     const normalized = {
@@ -198,8 +210,10 @@ export class TplinkRouterCard extends LitElement {
     };
     this._config = {
       speed_unit: "MBps",
+      txrx_color: false,
       ...normalized,
     };
+    this._restoreFilters(this._config.entry_id);
     this._loadRegistries();
   }
 
@@ -264,6 +278,10 @@ export class TplinkRouterCard extends LitElement {
         this._deviceRegistry = devices;
       }
 
+      if (!this._filtersLoaded) {
+        this._restoreFilters(this._selectedEntryId);
+      }
+
       if (!entries && !entities) {
         this._error = localize(this.hass, "errors.lists");
       }
@@ -298,6 +316,7 @@ export class TplinkRouterCard extends LitElement {
 
   private _setFilter(group: keyof FilterState, value: FilterState[keyof FilterState]) {
     this._filters = { ...this._filters, [group]: value } as FilterState;
+    this._saveFilters();
   }
 
   private _filterButtonClick(ev: Event) {
@@ -306,6 +325,37 @@ export class TplinkRouterCard extends LitElement {
     const value = target.dataset.value as FilterState[keyof FilterState] | undefined;
     if (!group || value === undefined) return;
     this._setFilter(group, value);
+  }
+
+  private _filtersStorageKey(entryId?: string) {
+    const key = entryId ?? this._selectedEntryId ?? "global";
+    return `tplink-router-card:filters:${key}`;
+  }
+
+  private _restoreFilters(entryId?: string) {
+    if (this._filtersLoaded) return;
+    try {
+      const raw = localStorage.getItem(this._filtersStorageKey(entryId));
+      if (!raw) return;
+      const parsed = JSON.parse(raw) as Partial<FilterState>;
+      if (!parsed || typeof parsed !== "object") return;
+      const band = parsed.band ?? "all";
+      const connection = parsed.connection ?? "all";
+      const status = parsed.status ?? "all";
+      this._filters = { band, connection, status } as FilterState;
+      this._filtersLoaded = true;
+    } catch (_err) {
+      // ignore storage errors
+    }
+  }
+
+  private _saveFilters() {
+    try {
+      localStorage.setItem(this._filtersStorageKey(), JSON.stringify(this._filters));
+      this._filtersLoaded = true;
+    } catch (_err) {
+      // ignore storage errors
+    }
   }
 
   private _toggleSort(ev: MouseEvent, key: string) {
@@ -921,6 +971,7 @@ export class TplinkRouterCard extends LitElement {
     });
 
     const onlineCount = rows.filter((row) => row.isOnline).length;
+    const colorizeRates = Boolean(this._config?.txrx_color);
     const actionItems = this._getActionItems(entryId);
     const holdSeconds = Math.max(1, Math.round(HOLD_DURATION_MS / 1000));
     const routerEntityId = this._getRouterEntityId(entryId);
@@ -1412,6 +1463,7 @@ export class TplinkRouterCard extends LitElement {
                       <tbody>
                         ${sorted.map(
                           (row) => {
+                            const isOffline = !row.isOnline;
                             const cells: Record<string, unknown> = {
                               name: html`
                                 <button class="link" @click=${() => this._showMoreInfo(row.entity_id)}>
@@ -1425,16 +1477,49 @@ export class TplinkRouterCard extends LitElement {
                                 </span>
                               `,
                               connection: row.connection,
-                              band: row.band,
+                              band: isOffline
+                                ? "—"
+                                : row.band === "—"
+                                  ? "—"
+                                  : html`
+                                      <span class="band-pill band-${row.bandType}">
+                                        <ha-icon class="band-icon" icon="mdi:wifi"></ha-icon>
+                                        <span class="band-label">
+                                          ${row.bandType === "2g"
+                                            ? "2.4G"
+                                            : row.bandType === "5g"
+                                              ? "5G"
+                                              : row.bandType === "6g"
+                                                ? "6G"
+                                                : row.band}
+                                        </span>
+                                      </span>
+                                    `,
                               ip: row.ip,
                               mac: row.mac,
                               hostname: row.hostname,
                               packetsSent: row.packetsSent,
                               packetsReceived: row.packetsReceived,
-                              up: row.upSpeed,
-                              down: row.downSpeed,
-                              tx: row.txRate,
-                              rx: row.rxRate,
+                              up: isOffline ? "—" : row.upSpeed,
+                              down: isOffline ? "—" : row.downSpeed,
+                              tx: isOffline
+                                ? "—"
+                                : colorizeRates
+                                  ? html`
+                                      <span class="rate ${rateClass(row.txRateValue)}">
+                                        ${row.txRate}
+                                      </span>
+                                    `
+                                  : row.txRate,
+                              rx: isOffline
+                                ? "—"
+                                : colorizeRates
+                                  ? html`
+                                      <span class="rate ${rateClass(row.rxRateValue)}">
+                                        ${row.rxRate}
+                                      </span>
+                                    `
+                                  : row.rxRate,
                               online: row.onlineTime,
                               traffic: row.trafficUsage,
                               signal: html`
@@ -1490,6 +1575,7 @@ export class TplinkRouterCard extends LitElement {
             },
           },
         },
+        { name: "txrx_color", selector: { boolean: {} } },
         {
           name: "columns",
           selector: {
@@ -1526,6 +1612,8 @@ export class TplinkRouterCard extends LitElement {
             return t("editor.router");
           case "speed_unit":
             return t("editor.speedUnit");
+          case "txrx_color":
+            return t("editor.txrxColor");
           case "columns":
             return t("editor.columns");
           default:
@@ -1535,6 +1623,9 @@ export class TplinkRouterCard extends LitElement {
       computeHelper: (schema: { name?: string }) => {
         if (schema.name === "columns") {
           return t("editor.columnsHelp");
+        }
+        if (schema.name === "txrx_color") {
+          return t("editor.txrxColorHelp");
         }
         return "";
       },

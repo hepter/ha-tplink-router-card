@@ -53,6 +53,8 @@
     "speedUnit": "Speed Unit (Up/Down)",
     "speedMBps": "MB/s (default)",
     "speedMbps": "Mbps",
+    "txrxColor": "Colorize TX/RX",
+    "txrxColorHelp": "Apply a color scale to TX/RX rates.",
     "columns": "Visible Columns",
     "columnsHelp": "Name column is always visible. Order follows your selection order."
   },

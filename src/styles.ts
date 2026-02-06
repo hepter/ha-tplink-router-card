@@ -364,6 +364,82 @@ export const cardStyles = css`
     border-radius: 50%;
   }
 
+  .band-pill {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    padding: 2px 8px;
+    border-radius: 999px;
+    font-weight: 600;
+    font-size: 11px;
+    border: 1px solid transparent;
+    white-space: nowrap;
+  }
+
+  .band-pill ha-icon {
+    --mdc-icon-size: 14px;
+  }
+
+  .band-pill.band-2g {
+    color: #0ea5e9;
+    background: rgba(14, 165, 233, 0.15);
+    border-color: rgba(14, 165, 233, 0.35);
+  }
+
+  .band-pill.band-5g {
+    color: #22c55e;
+    background: rgba(34, 197, 94, 0.15);
+    border-color: rgba(34, 197, 94, 0.35);
+  }
+
+  .band-pill.band-6g {
+    color: #f59e0b;
+    background: rgba(245, 158, 11, 0.18);
+    border-color: rgba(245, 158, 11, 0.35);
+  }
+
+  .band-pill.band-unknown {
+    color: var(--secondary-text-color);
+    background: rgba(0, 0, 0, 0.04);
+    border-color: rgba(0, 0, 0, 0.1);
+  }
+
+  .rate {
+    font-weight: 600;
+  }
+
+  .rate--na {
+    color: var(--secondary-text-color);
+  }
+
+  .rate--bad {
+    color: var(--rate-bad);
+  }
+
+  .rate--poor {
+    color: var(--rate-poor);
+  }
+
+  .rate--fair {
+    color: var(--rate-fair);
+  }
+
+  .rate--good {
+    color: var(--rate-good);
+  }
+
+  .rate--great {
+    color: var(--rate-great);
+  }
+
+  .rate--excellent {
+    color: var(--rate-excellent);
+  }
+
+  .rate--ultra {
+    color: var(--rate-ultra);
+  }
+
   .muted {
     color: var(--secondary-text-color);
   }
@@ -389,5 +465,12 @@ export const cardStyles = css`
     --signal-fair: #e0c341;
     --signal-good: #7bc46d;
     --signal-excellent: #3aa45b;
+    --rate-bad: #d64545;
+    --rate-poor: #f08c2e;
+    --rate-fair: #e0c341;
+    --rate-good: #7bc46d;
+    --rate-great: #14b8a6;
+    --rate-excellent: #3b82f6;
+    --rate-ultra: #6366f1;
   }
 `;

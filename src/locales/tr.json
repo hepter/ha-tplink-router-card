@@ -53,6 +53,8 @@
     "speedUnit": "Hız Birimi (Up/Down)",
     "speedMBps": "MB/s (varsayılan)",
     "speedMbps": "Mbps",
+    "txrxColor": "TX/RX Renklendir",
+    "txrxColorHelp": "TX/RX hızlarını renklendir.",
     "columns": "Görünen Sütunlar",
     "columnsHelp": "Ad sütunu her zaman görünür. Seçim sırası kolon sırası olur."
   },

@@ -22,6 +22,7 @@ export interface TplinkRouterCardConfig {
   entry_id?: string;
   title?: string;
   speed_unit?: "MBps" | "Mbps";
+  txrx_color?: boolean;
   columns?: string[];
 }
 
