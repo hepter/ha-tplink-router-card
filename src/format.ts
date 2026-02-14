@@ -45,9 +45,15 @@ export const normalizeMbps = (value?: number | null) => {
 export const normalizeLinkMbps = (
   value?: number | null,
   band?: "2g" | "5g" | "6g" | "unknown",
+  unitHint: "auto" | "kbps" | "mbps" = "auto",
 ) => {
   if (value === null || value === undefined || !Number.isFinite(value)) return null;
   const abs = Math.abs(value);
+  if (unitHint === "kbps") {
+    if (abs >= 10_000_000) return value / 1_000_000; // assume bps
+    return value / 1_000; // assume Kbps
+  }
+  if (unitHint === "mbps") return value;
   if (abs >= 10_000_000) return value / 1_000_000; // assume bps
   if (abs >= 10_000) return value / 1_000; // assume Kbps
   if (abs >= 5_000 && abs < 10_000 && band && band !== "6g") {
@@ -101,8 +107,9 @@ export const formatMbps = (value?: number | null) => {
 export const formatLinkSpeed = (
   value?: number | null,
   band?: "2g" | "5g" | "6g" | "unknown",
+  unitHint: "auto" | "kbps" | "mbps" = "auto",
 ) => {
-  const mbps = normalizeLinkMbps(value, band);
+  const mbps = normalizeLinkMbps(value, band, unitHint);
   if (mbps === null) return "—";
   const decimals = mbps >= 100 ? 0 : mbps >= 10 ? 1 : 2;
   return `${mbps.toFixed(decimals)} Mbps`;

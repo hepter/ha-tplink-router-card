@@ -73,6 +73,7 @@ type ActionItem = {
 };
 
 const HOLD_DURATION_MS = 1000;
+type LinkRateUnitHint = "auto" | "kbps";
 
 type RowData = {
   entity_id: string;
@@ -148,6 +149,26 @@ const extractIp = (value?: string) => {
   }
   const match = raw.match(/(\d{1,3}(?:\.\d{1,3}){3})/);
   return match ? match[1] : undefined;
+};
+
+const detectLinkRateUnit = (states: HassEntity[]): LinkRateUnitHint => {
+  let max = 0;
+  let max2g = 0;
+  for (const state of states) {
+    const attrs = state.attributes as Record<string, unknown>;
+    const band = normalizeBand(attrs.band ?? attrs.bandwidth ?? attrs.frequency);
+    const txRate = toNumber(attrs.tx_rate);
+    const rxRate = toNumber(attrs.rx_rate);
+    for (const value of [txRate, rxRate]) {
+      if (value === null) continue;
+      const abs = Math.abs(value);
+      if (abs > max) max = abs;
+      if (band === "2g" && abs > max2g) max2g = abs;
+    }
+  }
+  if (max >= 10_000) return "kbps";
+  if (max2g >= 1_000) return "kbps";
+  return "auto";
 };
 
 const compareValues = (a: unknown, b: unknown) => {
@@ -438,6 +459,8 @@ export class TplinkRouterCard extends LitElement {
       });
     }
 
+    const linkRateUnit = detectLinkRateUnit(entities);
+
     return entities.map((state) => {
       const attrs = state.attributes as Record<string, unknown>;
       const nameRaw = safeString(attrs.friendly_name ?? state.entity_id);
@@ -458,8 +481,8 @@ export class TplinkRouterCard extends LitElement {
       const rxRateRaw = toNumber(attrs.rx_rate);
       const upSpeedValue = normalizeMbps(upSpeedRaw);
       const downSpeedValue = normalizeMbps(downSpeedRaw);
-      const txRateValue = normalizeLinkMbps(txRateRaw, bandType);
-      const rxRateValue = normalizeLinkMbps(rxRateRaw, bandType);
+      const txRateValue = normalizeLinkMbps(txRateRaw, bandType, linkRateUnit);
+      const rxRateValue = normalizeLinkMbps(rxRateRaw, bandType, linkRateUnit);
       const onlineTimeValue = toNumber(attrs.online_time);
       const trafficUsageValue = toNumber(attrs.traffic_usage);
       const signalValue = toNumber(attrs.signal);
@@ -487,9 +510,9 @@ export class TplinkRouterCard extends LitElement {
         upSpeedValue,
         downSpeed: formatSpeed(downSpeedRaw, this._config?.speed_unit ?? "MBps"),
         downSpeedValue,
-        txRate: formatLinkSpeed(txRateRaw, bandType),
+        txRate: formatLinkSpeed(txRateRaw, bandType, linkRateUnit),
         txRateValue,
-        rxRate: formatLinkSpeed(rxRateRaw, bandType),
+        rxRate: formatLinkSpeed(rxRateRaw, bandType, linkRateUnit),
         rxRateValue,
         onlineTime: formatDuration(onlineTimeValue),
         onlineTimeValue,
