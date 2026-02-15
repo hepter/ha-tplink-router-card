@@ -1,0 +1,93 @@
+{
+  "entryId": "entry-omada-1",
+  "states": {
+    "device_tracker.john_phone": {
+      "entity_id": "device_tracker.john_phone",
+      "state": "home",
+      "attributes": {
+        "friendly_name": "John Phone",
+        "source_type": "router",
+        "ip": "192.168.0.42",
+        "mac": "AA-BB-CC-DD-EE-42",
+        "hostname": "john-phone",
+        "wireless": true,
+        "guest": false,
+        "radio": "5ghz",
+        "ssid": "HomeWiFi"
+      }
+    },
+    "sensor.john_phone_downloaded": {
+      "entity_id": "sensor.john_phone_downloaded",
+      "state": "125.5",
+      "attributes": {
+        "friendly_name": "John Phone Downloaded"
+      }
+    },
+    "sensor.john_phone_uploaded": {
+      "entity_id": "sensor.john_phone_uploaded",
+      "state": "64.25",
+      "attributes": {
+        "friendly_name": "John Phone Uploaded"
+      }
+    },
+    "sensor.john_phone_rx_activity": {
+      "entity_id": "sensor.john_phone_rx_activity",
+      "state": "1.5",
+      "attributes": {
+        "friendly_name": "John Phone RX Activity"
+      }
+    },
+    "sensor.john_phone_tx_activity": {
+      "entity_id": "sensor.john_phone_tx_activity",
+      "state": "0.5",
+      "attributes": {
+        "friendly_name": "John Phone TX Activity"
+      }
+    },
+    "sensor.john_phone_rssi": {
+      "entity_id": "sensor.john_phone_rssi",
+      "state": "-52",
+      "attributes": {
+        "friendly_name": "John Phone RSSI"
+      }
+    }
+  },
+  "entityRegistry": [
+    {
+      "entity_id": "device_tracker.john_phone",
+      "platform": "omada",
+      "config_entry_id": "entry-omada-1",
+      "device_id": "client-device-1"
+    },
+    {
+      "entity_id": "sensor.john_phone_downloaded",
+      "platform": "omada",
+      "config_entry_id": "entry-omada-1",
+      "device_id": "client-device-1"
+    },
+    {
+      "entity_id": "sensor.john_phone_uploaded",
+      "platform": "omada",
+      "config_entry_id": "entry-omada-1",
+      "device_id": "client-device-1"
+    },
+    {
+      "entity_id": "sensor.john_phone_rx_activity",
+      "platform": "omada",
+      "config_entry_id": "entry-omada-1",
+      "device_id": "client-device-1"
+    },
+    {
+      "entity_id": "sensor.john_phone_tx_activity",
+      "platform": "omada",
+      "config_entry_id": "entry-omada-1",
+      "device_id": "client-device-1"
+    },
+    {
+      "entity_id": "sensor.john_phone_rssi",
+      "platform": "omada",
+      "config_entry_id": "entry-omada-1",
+      "device_id": "client-device-1"
+    }
+  ]
+}

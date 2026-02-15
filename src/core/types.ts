@@ -23,6 +23,11 @@ export interface TplinkRouterCardConfig {
   title?: string;
   speed_unit?: "MBps" | "Mbps";
   txrx_color?: boolean;
+  updown_color?: boolean;
+  upload_speed_color_max?: number;
+  download_speed_color_max?: number;
+  // Deprecated: kept for backward compatibility with older configs.
+  speed_color_max?: number;
   columns?: string[];
 }
 

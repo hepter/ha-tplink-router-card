@@ -1,103 +1,90 @@
-# TP-Link Router Card
-
-Lovelace custom card for the `tplink_router` integration. It lists router clients in a fast, sortable table and adds router controls/insights in a compact header.
+# HA TP-Link Router Card
 
 [![hacs_badge](https://img.shields.io/badge/HACS-Custom-orange.svg)](https://github.com/custom-components/hacs)
 [![GitHub Release](https://img.shields.io/github/release/hepter/ha-tplink-router-card.svg)](https://github.com/hepter/ha-tplink-router-card/releases)
 [![License](https://img.shields.io/github/license/hepter/ha-tplink-router-card.svg)](LICENSE)
 
-![Add card dialog](card-config.png)
+A Lovelace card for Home Assistant focused on TP-Link client monitoring and quick router controls.
 
-![Card screenshot](card.png)
+![Card preview](card.png)
 
-## Features
-- Client table from `tplink_router` device_tracker entities.
-- Multi-sort columns (Shift + click) with empty values always pinned to the bottom.
-- Quick filters: band (2G/5G/6G), connection (WiFi/Wired/IoT/Guest), online/offline.
-- Search supports name, IP, host, MAC.
-- Signal dBm color scale.
-- Traffic usage formatted as bytes.
-- Up/Down unit selectable: MB/s (default) or Mbps.
-- TX/RX link speed formatted as Mbps with proper scaling.
-- Router header row:
-  - Router URL opens in a new tab.
-  - Hover tooltip on router URL shows model/manufacturer/firmware/hardware/MAC when available.
-  - Public IP shown on the right when available.
-  - CPU/MEM chips with hover tooltip.
-- Action icons for WiFi/Guest/IoT/Router actions:
-  - Destructive actions require hold (1s) with progress fill.
-  - Shift + click on an action icon opens entity details.
-- Router icon opens the HA device page in a new tab.
-- i18n: English, Turkish
+⭐ Found it useful? Please star the repo to support development and help others discover it.
 
-## Requirements
-- Home Assistant with the **TP-Link Router** custom integration installed and configured.
-- HACS (recommended) or manual resource install.
+## Highlights
+- Live client table from router `device_tracker` entities.
+- Fast search (name, IP, hostname, MAC) and compact quick filters.
+- Multi-sort (Shift + click), with empty values always kept at the bottom.
+- Strong formatting for traffic, link rates, duration, and signal quality.
+- Router header with local URL, public IP, CPU/MEM summary, and quick actions.
+- Hold-to-confirm safety for destructive actions (1 second).
+- Built-in diagnostics export (redacted only).
+- i18n support with automatic Home Assistant locale selection.
+- Optional colorization for TX/RX and Up/Down speeds.
+- Up/Down hover tooltip with utilization bar, Bandwidth Load, adaptive transfer unit, and current/max Mbps.
 
-Dependency:
-- `home-assistant-tplink-router` by AlexandrErohin: https://github.com/AlexandrErohin/home-assistant-tplink-router
+## Compatibility
+- Primary integration: [`home-assistant-tplink-router`](https://github.com/AlexandrErohin/home-assistant-tplink-router)
+- Router model support follows the upstream integration support list.
+- In practice this typically includes TP-Link families such as Archer, Deco, TL-MR/TL-WA and supported Mercusys models from the upstream project.
+- Partial Omada action support is available when matching entities exist:
+  - Reconnect
+  - Start WLAN Optimization
+
+Notes:
+- Available actions and sensors depend on model, firmware, and integration-exposed entities.
+- If an action cannot be matched safely, it is hidden by design.
 
 ## Installation
 
-### HACS (recommended)
-This card is a HACS **Dashboard** (Lovelace) plugin.
+### 1. Add directly to HACS (recommended)
 
-1. HACS → Integrations → `⋮` → **Custom repositories**.
-2. Paste this repo URL and select **Dashboard**.
-3. Install the card from HACS.
-4. Add resource:
-   - Settings → Dashboards → Resources → Add Resource
-   - URL: `/hacsfiles/ha-tplink-router-card/ha-tplink-router-card.js`
+[![Add to HACS](https://my.home-assistant.io/badges/hacs_repository.svg)](https://my.home-assistant.io/redirect/hacs_repository/?owner=hepter&repository=ha-tplink-router-card&category=plugin)
+
+### 2. HACS (manual path)
+1. Open HACS.
+2. Add this repository as a **Dashboard** custom repository.
+3. Install **HA TP-Link Router Card**.
+4. Verify resource exists:
+   - `/hacsfiles/ha-tplink-router-card/ha-tplink-router-card.js`
    - Type: `JavaScript Module`
 
-### Manual install
-Download the file from the latest GitHub Release and copy it into your HA `/config/www/ha-tplink-router-card/` folder.
-
-File to download:
-- `ha-tplink-router-card.js`
-
-Example path:
+### 3. Manual
+Download the latest release asset and place it under:
 - `/config/www/ha-tplink-router-card/ha-tplink-router-card.js`
 
-### CLI install
-From your HA server:
+CLI example:
 ```bash
-cd /config/www/ha-tplink-router-card
-wget https://github.com/hepter/ha-tplink-router-card/releases/download/v0.1.0/ha-tplink-router-card.js
+mkdir -p /config/www/ha-tplink-router-card
+wget -O /config/www/ha-tplink-router-card/ha-tplink-router-card.js \
+  https://github.com/hepter/ha-tplink-router-card/releases/latest/download/ha-tplink-router-card.js
 ```
 
-### Add resource reference
-If you configure Lovelace via YAML, add:
+Add resource (YAML):
 ```yaml
 resources:
-  - url: /local/ha-tplink-router-card/ha-tplink-router-card.js?v=0.1.0
+  - url: /local/ha-tplink-router-card/ha-tplink-router-card.js?v=1
     type: module
 ```
 
-If you use the UI:
-1. Enable Advanced Mode in your user profile.
-2. Settings → Dashboards → Resources → Add Resource.
-3. URL: `/local/ha-tplink-router-card/ha-tplink-router-card.js`
-4. Type: `JavaScript Module`
+UI path:
+- Settings → Dashboards → Resources → Add Resource
 
-### Updating
-- HACS: update from HACS UI.
-- Manual: replace the local JS file with the latest release asset and bump the `?v=` version in the resource URL.
-
-## Usage
-Add a card and select your TP-Link router entry in the UI editor.
-
-Minimal YAML:
+## Configuration
+Minimal:
 ```yaml
 type: custom:tplink-router-card
 ```
 
-Full config example:
+Example:
 ```yaml
 type: custom:tplink-router-card
-title: "My Router"
-entry_id: "<config_entry_id>"
-speed_unit: "MBps" # MBps (default) or Mbps
+title: My Router
+entry_id: <config_entry_id>
+speed_unit: MBps
+txrx_color: true
+updown_color: true
+upload_speed_color_max: 1000
+download_speed_color_max: 100
 columns:
   - status
   - connection
@@ -107,8 +94,8 @@ columns:
   - hostname
   - packetsSent
   - packetsReceived
-  - up
   - down
+  - up
   - tx
   - rx
   - online
@@ -116,21 +103,55 @@ columns:
   - signal
 ```
 
-Notes:
-- `entry_id` is selected in the card editor (TP-Link router integration entry).
-- The `name` column is always visible and cannot be removed.
-- Column order follows your selection order.
+Options:
+- `title`: Card title.
+- `entry_id`: Config entry to use. Selected from editor.
+- `speed_unit`: `MBps` (default) or `Mbps` for Up/Down columns.
+- `txrx_color`: Enable colorized TX/RX speed levels.
+- `updown_color`: Enable colorized upload/download speeds.
+- `upload_speed_color_max`: Upload color scale max in Mbps. Default `1000`.
+- `download_speed_color_max`: Download color scale max in Mbps. Default `100`.
+- `columns`: Optional column set and order.
+
+Rules:
+- `name` is always visible and cannot be removed.
+- Column order follows `columns` order.
+
+Speed data model:
+- `up_speed` / `down_speed` from `tplink_router` are treated as transfer rates in `bytes/s`.
+- `speed_unit` selects how Up/Down values are displayed (`MB/s` or `Mbps`).
+- `tx_rate` / `rx_rate` are mapped as link-rate fields with separate formatting logic.
+
+Tooltip semantics (Up/Down):
+- `Bandwidth Load`: current speed as percentage of the configured color scale max.
+- `Transfer`: adaptive transfer value (`B/s`, `KB/s`, `MB/s`, `GB/s`).
+- `Mbps`: current Mbps and scale max shown as `current/max`.
+
+Editor preview:
+
+![Card editor](card-config.png)
+
+## Diagnostics Export
+When reporting a bug, attach a diagnostics dump:
+1. Open the card.
+2. Double-click the card title.
+3. Click the download icon.
+4. Attach the JSON file to your issue.
+
+Export behavior:
+- Output is redacted only.
+- Sensitive values are masked (IP/MAC/URL/token-like values and sensitive keys).
+- Includes card UI state (search text, filters, sorts) to reproduce behavior.
+- Includes size/depth protection and truncation markers for very large payloads.
+- For your security, review the file before attaching it to a public issue.
 
 ## Troubleshooting
-- If router entries are missing, ensure you have admin rights (entity registry WS calls require it).
-- If router info tooltip is empty, the integration might not expose device metadata. The card falls back gracefully.
+- Missing entries: ensure the integration is installed and the selected `entry_id` is correct.
+- Missing metadata/tooltips: some routers/integrations do not expose full router details.
+- No action icons: action entities may be unsupported, unavailable, or intentionally filtered for safety.
 
 ## Contributing
-Contributions are welcome. Please see `CONTRIBUTING.md` for guidelines and local setup.
-
-## Credits
-- TP-Link Router integration by AlexandrErohin (data source): https://github.com/AlexandrErohin/home-assistant-tplink-router
-- Home Assistant community and UI framework.
+See [`CONTRIBUTING.md`](CONTRIBUTING.md).
 
 ## License
-MIT. See `LICENSE` for details.
+MIT. See [`LICENSE`](LICENSE).

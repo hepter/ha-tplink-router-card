@@ -1,0 +1,33 @@
+{
+  "state": {
+    "entity_id": "device_tracker.client_iot_1",
+    "state": "home",
+    "attributes": {
+      "friendly_name": "Client IoT 1",
+      "source_type": "router",
+      "ip": "192.168.1.244",
+      "mac": "0C-DC-7E-62-A0-84",
+      "host_name": "client-iot-1",
+      "connection": "IoT",
+      "band": "2G",
+      "packets_sent": 47484,
+      "packets_received": 226447,
+      "up_speed": 0,
+      "down_speed": 0,
+      "tx_rate": 65000,
+      "rx_rate": 6000,
+      "online_time": 75818.65,
+      "traffic_usage": 0,
+      "signal": -45
+    }
+  },
+  "speedUnit": "MBps",
+  "expected": {
+    "connectionType": "iot",
+    "bandType": "2g",
+    "txRate": "65.0 Mbps",
+    "rxRate": "6.00 Mbps",
+    "onlineTime": "21:03:38",
+    "signal": "-45 dBm"
+  }
+}

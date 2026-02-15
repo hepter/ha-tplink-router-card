@@ -1,0 +1,37 @@
+{
+  "selection": {
+    "entry_id": "entry-sample-1"
+  },
+  "states": [
+    {
+      "entity_id": "device_tracker.client_iot_1",
+      "state": "home",
+      "attributes": {
+        "source_type": "router",
+        "ip": "192.xxx.xxx.24",
+        "mac": "AA-**-**-**-**-24",
+        "host_name": "cl***24",
+        "connection": "IoT",
+        "band": "2G",
+        "packets_sent": 1200,
+        "packets_received": 2300,
+        "up_speed": 0,
+        "down_speed": 0,
+        "tx_rate": 65000,
+        "rx_rate": 52000,
+        "online_time": 253943.83,
+        "traffic_usage": 0,
+        "signal": -45,
+        "friendly_name": "Cl***24"
+      }
+    }
+  ],
+  "entity_registry": [
+    {
+      "entity_id": "device_tracker.client_iot_1",
+      "platform": "tplink_router",
+      "config_entry_id": "entry-sample-1",
+      "device_id": "device-client-iot-1"
+    }
+  ]
+}

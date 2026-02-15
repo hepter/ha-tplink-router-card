@@ -1,4 +1,4 @@
-import "./card";
+import "./card/tplink-router-card";
 
 const VERSION =
   import.meta.env.VITE_CARD_VERSION ??

@@ -1,17 +1,23 @@
 import { LitElement, html } from "lit";
 import { cardStyles } from "./styles";
+import { localize } from "../i18n";
+import { buildDiagnosticPackage } from "../utils/export-utils";
+import { matchAction } from "../utils/action-matcher";
+import { formatSpeed } from "../utils/format";
 import {
-  formatBytes,
-  formatDuration,
-  formatLinkSpeed,
-  formatMbps,
-  formatNumber,
-  formatSpeed,
-  normalizeLinkMbps,
-  normalizeMbps,
-  safeString,
-} from "./format";
-import { localize } from "./i18n";
+  buildOmadaClientMetrics,
+  mapOmadaStateToRow,
+  selectOmadaTrackers,
+} from "../adapters/omada";
+import {
+  detectLinkRateUnit,
+  mapTrackerStateToRow,
+  normalizeMac,
+  preferredRouterDeviceIds,
+  selectRouterTrackers,
+  toNumber,
+} from "../adapters/tplink";
+import type { MappedTrackerRow } from "../adapters/tplink";
 import type {
   ConfigEntry,
   DeviceRegistryEntry,
@@ -19,30 +25,52 @@ import type {
   HassEntity,
   HomeAssistant,
   TplinkRouterCardConfig,
-} from "./types";
+} from "../core/types";
 
-const STATUS_ONLINE = new Set(["home", "on", "connected"]);
+const inferSpeedScaleMax = (values: number[]) => {
+  const max = values.length > 0 ? Math.max(...values) : 0;
+  if (max <= 120) return 100;
+  if (max <= 600) return 300;
+  if (max <= 1200) return 1000;
+  if (max <= 2500) return 2000;
+  if (max <= 5000) return 5000;
+  return 10000;
+};
 
-const toNumber = (value: unknown): number | null => {
-  if (typeof value === "number" && Number.isFinite(value)) return value;
-  if (typeof value === "string" && value.trim() !== "") {
-    const parsed = Number(value);
-    return Number.isFinite(parsed) ? parsed : null;
+const resolveSpeedScale = (values: number[], maxOverride?: number) => {
+  const autoMax = inferSpeedScaleMax(values);
+  const min = 0;
+  const max = typeof maxOverride === "number" ? maxOverride : autoMax;
+  if (max <= min) {
+    return { min, max: Math.max(min + 1, autoMax) };
   }
-  return null;
+  return { min, max };
 };
 
-const signalColor = (dbm: number | null) => {
-  if (dbm === null) return "var(--secondary-text-color)";
-  if (dbm <= -80) return "var(--signal-bad)";
-  if (dbm <= -70) return "var(--signal-poor)";
-  if (dbm <= -65) return "var(--signal-fair)";
-  if (dbm <= -60) return "var(--signal-good)";
-  return "var(--signal-excellent)";
+const updownRateClass = (mbps: number | null, min: number, max: number) => {
+  if (mbps === null || !Number.isFinite(mbps) || mbps <= 0) return "rate--na";
+  const clamped = Math.min(Math.max(mbps, min), max);
+  const span = Math.max(max - min, 1);
+  const ratio = (clamped - min) / span;
+  if (ratio < 0.1) return "ud-rate--bad";
+  if (ratio < 0.22) return "ud-rate--poor";
+  if (ratio < 0.38) return "ud-rate--fair";
+  if (ratio < 0.54) return "ud-rate--good";
+  if (ratio < 0.66) return "ud-rate--great";
+  if (ratio < 0.75) return "ud-rate--excellent";
+  return "ud-rate--ultra";
 };
 
-const rateClass = (mbps: number | null) => {
-  if (mbps === null || !Number.isFinite(mbps)) return "rate--na";
+const formatTooltipMetric = (value: number) => {
+  if (!Number.isFinite(value)) return "0";
+  const abs = Math.abs(value);
+  if (abs >= 100) return value.toFixed(0);
+  if (abs >= 10) return value.toFixed(1);
+  return value.toFixed(2);
+};
+
+const txrxRateClass = (mbps: number | null) => {
+  if (mbps === null || !Number.isFinite(mbps) || mbps <= 0) return "rate--na";
   if (mbps < 10) return "rate--bad";
   if (mbps < 30) return "rate--poor";
   if (mbps < 100) return "rate--fair";
@@ -73,66 +101,10 @@ type ActionItem = {
 };
 
 const HOLD_DURATION_MS = 1000;
-type LinkRateUnitHint = "auto" | "kbps";
+const CARD_VERSION = import.meta.env.VITE_CARD_VERSION ?? "dev";
+type RowData = MappedTrackerRow;
 
-type RowData = {
-  entity_id: string;
-  name: string;
-  nameRaw: string;
-  macNormalized: string;
-  isOnline: boolean;
-  statusValue: number;
-  statusColor: string;
-  connection: string;
-  connectionType: "wifi" | "wired" | "iot" | "guest" | "unknown";
-  band: string;
-  bandType: "2g" | "5g" | "6g" | "unknown";
-  ip: string;
-  mac: string;
-  hostname: string;
-  packetsSent: string;
-  packetsSentValue: number | null;
-  packetsReceived: string;
-  packetsReceivedValue: number | null;
-  upSpeed: string;
-  upSpeedValue: number | null;
-  downSpeed: string;
-  downSpeedValue: number | null;
-  txRate: string;
-  txRateValue: number | null;
-  rxRate: string;
-  rxRateValue: number | null;
-  onlineTime: string;
-  onlineTimeValue: number | null;
-  trafficUsage: string;
-  trafficUsageValue: number | null;
-  signal: string;
-  signalValue: number | null;
-  signalColor: string;
-};
-
-const normalizeBand = (value: unknown): RowData["bandType"] => {
-  if (value === null || value === undefined) return "unknown";
-  const text = String(value).toLowerCase();
-  if (text.includes("2.4") || text.includes("2g")) return "2g";
-  if (text.includes("5g")) return "5g";
-  if (text.includes("6g")) return "6g";
-  return "unknown";
-};
-
-const normalizeConnection = (value: unknown): RowData["connectionType"] => {
-  if (value === null || value === undefined) return "unknown";
-  const text = String(value).toLowerCase();
-  if (text.includes("guest")) return "guest";
-  if (text.includes("iot")) return "iot";
-  if (text.includes("wired") || text.includes("lan") || text.includes("ethernet")) return "wired";
-  return "wifi";
-};
-
-const normalizeMac = (value: string) =>
-  value.replace(/[^0-9a-f]/gi, "").toLowerCase();
-
-const looksLikeMac = (value: string) => /^[0-9a-f:\-]+$/i.test(value);
+const looksLikeMac = (value: string) => /^[0-9a-f:-]+$/i.test(value);
 
 const looksLikeIp = (value: string) => /^\d{1,3}(\.\d{1,3}){3}$/.test(value);
 
@@ -144,31 +116,11 @@ const extractIp = (value?: string) => {
   try {
     const url = new URL(raw);
     if (looksLikeIp(url.hostname)) return url.hostname;
-  } catch (_err) {
+  } catch {
     // ignore
   }
   const match = raw.match(/(\d{1,3}(?:\.\d{1,3}){3})/);
   return match ? match[1] : undefined;
-};
-
-const detectLinkRateUnit = (states: HassEntity[]): LinkRateUnitHint => {
-  let max = 0;
-  let max2g = 0;
-  for (const state of states) {
-    const attrs = state.attributes as Record<string, unknown>;
-    const band = normalizeBand(attrs.band ?? attrs.bandwidth ?? attrs.frequency);
-    const txRate = toNumber(attrs.tx_rate);
-    const rxRate = toNumber(attrs.rx_rate);
-    for (const value of [txRate, rxRate]) {
-      if (value === null) continue;
-      const abs = Math.abs(value);
-      if (abs > max) max = abs;
-      if (band === "2g" && abs > max2g) max2g = abs;
-    }
-  }
-  if (max >= 10_000) return "kbps";
-  if (max2g >= 1_000) return "kbps";
-  return "auto";
 };
 
 const compareValues = (a: unknown, b: unknown) => {
@@ -199,6 +151,7 @@ export class TplinkRouterCard extends LitElement {
     _filter: { state: true },
     _sorts: { state: true },
     _filters: { state: true },
+    _showExportButton: { state: true },
   } as const;
 
   static styles = cardStyles;
@@ -223,16 +176,30 @@ export class TplinkRouterCard extends LitElement {
   private _registryFailed = false;
   private _deviceRegistry: DeviceRegistryEntry[] = [];
   private _filtersLoaded = false;
+  private _showExportButton = false;
 
   setConfig(config: TplinkRouterCardConfig): void {
     const normalized = {
-      type: "custom:tplink-router-card",
       ...(config ?? {}),
+      type: "custom:tplink-router-card",
     };
+    const legacySpeedMax =
+      typeof normalized.speed_color_max === "number" ? normalized.speed_color_max : undefined;
+    const uploadSpeedColorMax =
+      typeof normalized.upload_speed_color_max === "number"
+        ? normalized.upload_speed_color_max
+        : (legacySpeedMax ?? 1000);
+    const downloadSpeedColorMax =
+      typeof normalized.download_speed_color_max === "number"
+        ? normalized.download_speed_color_max
+        : (legacySpeedMax ?? 100);
     this._config = {
       speed_unit: "MBps",
-      txrx_color: false,
+      txrx_color: true,
+      updown_color: true,
       ...normalized,
+      upload_speed_color_max: uploadSpeedColorMax,
+      download_speed_color_max: downloadSpeedColorMax,
     };
     this._restoreFilters(this._config.entry_id);
     this._loadRegistries();
@@ -255,14 +222,14 @@ export class TplinkRouterCard extends LitElement {
 
       try {
         entries = await this.hass.callWS<ConfigEntry[]>({ type: "config_entries/get" });
-      } catch (err) {
+      } catch {
         if (this.hass.callApi) {
           try {
             entries = await this.hass.callApi<ConfigEntry[]>(
               "GET",
               "config/config_entries/entry",
             );
-          } catch (_apiErr) {
+          } catch {
             entries = null;
           }
         }
@@ -272,7 +239,7 @@ export class TplinkRouterCard extends LitElement {
         entities = await this.hass.callWS<EntityRegistryEntry[]>({
           type: "config/entity_registry/list",
         });
-      } catch (err) {
+      } catch {
         entities = null;
       }
 
@@ -280,12 +247,17 @@ export class TplinkRouterCard extends LitElement {
         devices = await this.hass.callWS<DeviceRegistryEntry[]>({
           type: "config/device_registry/list",
         });
-      } catch (err) {
+      } catch {
         devices = null;
       }
 
       if (entries) {
-        this._entries = entries.filter((entry) => entry.domain === "tplink_router");
+        this._entries = entries.filter(
+          (entry) =>
+            entry.domain === "tplink_router" ||
+            entry.domain === "omada" ||
+            entry.domain === "tplink_omada",
+        );
       }
 
       if (entities) {
@@ -307,7 +279,7 @@ export class TplinkRouterCard extends LitElement {
         this._error = localize(this.hass, "errors.lists");
       }
       this._loaded = true;
-    } catch (err) {
+    } catch {
       this._error = localize(this.hass, "errors.lists");
     } finally {
       this._loading = false;
@@ -365,7 +337,7 @@ export class TplinkRouterCard extends LitElement {
       const status = parsed.status ?? "all";
       this._filters = { band, connection, status } as FilterState;
       this._filtersLoaded = true;
-    } catch (_err) {
+    } catch {
       // ignore storage errors
     }
   }
@@ -374,9 +346,14 @@ export class TplinkRouterCard extends LitElement {
     try {
       localStorage.setItem(this._filtersStorageKey(), JSON.stringify(this._filters));
       this._filtersLoaded = true;
-    } catch (_err) {
+    } catch {
       // ignore storage errors
     }
+  }
+
+  private _toggleExportButton(ev: MouseEvent) {
+    ev.preventDefault();
+    this._showExportButton = !this._showExportButton;
   }
 
   private _toggleSort(ev: MouseEvent, key: string) {
@@ -405,15 +382,19 @@ export class TplinkRouterCard extends LitElement {
   }
 
   private _showMoreInfo(entityId: string) {
-    const event = new Event("hass-action", { bubbles: true, composed: true });
-    (event as CustomEvent).detail = {
-      config: {
-        entity: entityId,
-        tap_action: { action: "more-info" },
-      },
-      action: "tap",
-    };
-    this.dispatchEvent(event);
+    this.dispatchEvent(
+      new CustomEvent("hass-action", {
+        detail: {
+          config: {
+            entity: entityId,
+            tap_action: { action: "more-info" },
+          },
+          action: "tap",
+        },
+        bubbles: true,
+        composed: true,
+      }),
+    );
   }
 
   private _showDeviceInfo(deviceId: string) {
@@ -439,93 +420,54 @@ export class TplinkRouterCard extends LitElement {
     if (!this.hass) return [];
 
     const entryId = this._selectedEntryId;
+    const entryDomain = entryId
+      ? this._entries.find((entry) => entry.entry_id === entryId)?.domain
+      : undefined;
+    if (entryId && !entryDomain) return [];
 
-    let entities: HassEntity[] = [];
-
-    if (entryId && !this._registryFailed && this._entityRegistry.length > 0) {
-      const registry = this._entityRegistry.filter(
-        (entry) => entry.platform === "tplink_router" && entry.entity_id.startsWith("device_tracker."),
+    if (entryDomain === "omada" || entryDomain === "tplink_omada") {
+      const trackers = selectOmadaTrackers(
+        this.hass.states,
+        this._entityRegistry,
+        entryId,
+        this._registryFailed,
+      );
+      const metricsByDevice = buildOmadaClientMetrics(
+        this.hass.states,
+        this._entityRegistry,
+        entryId,
+      );
+      const trackerDeviceIdByEntity = new Map(
+        this._entityRegistry
+          .filter((item) => item.entity_id.startsWith("device_tracker."))
+          .map((item) => [item.entity_id, item.device_id] as const),
       );
 
-      entities = registry
-        .filter((entry) => entry.config_entry_id === entryId)
-        .map((entry) => this.hass?.states[entry.entity_id])
-        .filter((state) => state !== undefined);
-    } else {
-      entities = Object.values(this.hass.states).filter((state) => {
-        if (!state.entity_id.startsWith("device_tracker.")) return false;
-        const source = (state.attributes as Record<string, unknown>).source_type;
-        return source === "router";
+      return trackers.map((state) => {
+        const deviceId = trackerDeviceIdByEntity.get(state.entity_id);
+        return mapOmadaStateToRow(
+          state,
+          this._config?.speed_unit ?? "MBps",
+          deviceId ? metricsByDevice.get(deviceId) : undefined,
+        );
       });
     }
 
+    const entities = selectRouterTrackers(
+      this.hass.states,
+      this._entityRegistry,
+      entryId,
+      this._registryFailed,
+    );
+
     const linkRateUnit = detectLinkRateUnit(entities);
 
-    return entities.map((state) => {
-      const attrs = state.attributes as Record<string, unknown>;
-      const nameRaw = safeString(attrs.friendly_name ?? state.entity_id);
-      const isOnline = STATUS_ONLINE.has(state.state);
-      const statusColor = isOnline ? "#3aa45b" : "#9aa0a6";
-      const connection = safeString(attrs.connection ?? "—");
-      const band = safeString(attrs.band ?? "—");
-      const bandType = normalizeBand(band);
-      const ip = safeString(attrs.ip ?? attrs.ip_address ?? attrs.ipaddr ?? "—");
-      const mac = safeString(attrs.mac ?? attrs.mac_address ?? attrs.macaddr ?? "—");
-      const hostname = safeString(attrs.host_name ?? attrs.hostname ?? attrs.host ?? "—");
-      const macNormalized = normalizeMac(mac);
-      const packetsSentValue = toNumber(attrs.packets_sent);
-      const packetsReceivedValue = toNumber(attrs.packets_received);
-      const upSpeedRaw = toNumber(attrs.up_speed);
-      const downSpeedRaw = toNumber(attrs.down_speed);
-      const txRateRaw = toNumber(attrs.tx_rate);
-      const rxRateRaw = toNumber(attrs.rx_rate);
-      const upSpeedValue = normalizeMbps(upSpeedRaw);
-      const downSpeedValue = normalizeMbps(downSpeedRaw);
-      const txRateValue = normalizeLinkMbps(txRateRaw, bandType, linkRateUnit);
-      const rxRateValue = normalizeLinkMbps(rxRateRaw, bandType, linkRateUnit);
-      const onlineTimeValue = toNumber(attrs.online_time);
-      const trafficUsageValue = toNumber(attrs.traffic_usage);
-      const signalValue = toNumber(attrs.signal);
-
-      return {
-        entity_id: state.entity_id,
-        name: nameRaw,
-        nameRaw,
-        macNormalized,
-        isOnline,
-        statusValue: isOnline ? 1 : 0,
-        statusColor,
-        connection,
-        connectionType: normalizeConnection(connection),
-        band,
-        bandType,
-        ip,
-        mac,
-        hostname,
-        packetsSent: formatNumber(packetsSentValue ?? NaN),
-        packetsSentValue,
-        packetsReceived: formatNumber(packetsReceivedValue ?? NaN),
-        packetsReceivedValue,
-        upSpeed: formatSpeed(upSpeedRaw, this._config?.speed_unit ?? "MBps"),
-        upSpeedValue,
-        downSpeed: formatSpeed(downSpeedRaw, this._config?.speed_unit ?? "MBps"),
-        downSpeedValue,
-        txRate: formatLinkSpeed(txRateRaw, bandType, linkRateUnit),
-        txRateValue,
-        rxRate: formatLinkSpeed(rxRateRaw, bandType, linkRateUnit),
-        rxRateValue,
-        onlineTime: formatDuration(onlineTimeValue),
-        onlineTimeValue,
-        trafficUsage: formatBytes(trafficUsageValue),
-        trafficUsageValue,
-        signal: signalValue !== null ? `${signalValue} dBm` : "—",
-        signalValue,
-        signalColor: signalColor(signalValue),
-      };
-    });
+    return entities.map((state) =>
+      mapTrackerStateToRow(state, this._config?.speed_unit ?? "MBps", linkRateUnit),
+    );
   }
 
-  private _getActionItems(entryId: string | undefined): ActionItem[] {
+  private _getActionItems(entryId: string | undefined, entryDomain?: string): ActionItem[] {
     if (!this.hass || !entryId || this._entityRegistry.length === 0) return [];
     const registry = this._entityRegistry.filter((entry) => entry.config_entry_id === entryId);
     const states = registry
@@ -541,16 +483,8 @@ export class TplinkRouterCard extends LitElement {
         const friendly = String(
           (state.attributes as Record<string, unknown>).friendly_name ?? state.entity_id,
         );
-        const lower = friendly.toLowerCase();
-        let kind: ActionItem["kind"] = "router";
-        if (lower.includes("guest")) kind = "guest";
-        else if (lower.includes("iot")) kind = "iot";
-        else if (lower.includes("wifi")) kind = "host";
-
-        let band: ActionItem["band"] | undefined;
-        if (lower.includes("2.4") || lower.includes("2g")) band = "2g";
-        else if (lower.includes("5g")) band = "5g";
-        else if (lower.includes("6g")) band = "6g";
+        const matched = matchAction(domain, state.entity_id, friendly, entryDomain);
+        if (!matched) return null;
 
         const icon = String(
           (state.attributes as Record<string, unknown>).icon ??
@@ -559,31 +493,20 @@ export class TplinkRouterCard extends LitElement {
         const isOn = state.state === "on";
         const available =
           domain === "button" ? state.state !== "unavailable" : state.state !== "unavailable";
-        const requiresHold =
-          domain === "button" ||
-          lower.includes("wifi") ||
-          lower.includes("guest") ||
-          lower.includes("iot");
-        const isScan = lower.includes("data fetching") || state.entity_id.includes("scanning");
-        const holdRequired = isScan ? false : requiresHold;
 
         return {
           entity_id: state.entity_id,
           domain,
-          kind,
-          band,
+          kind: matched.kind,
+          band: matched.band,
           label: friendly,
           icon,
           isOn,
           available,
-          requiresHold: holdRequired,
+          requiresHold: matched.requiresHold,
         } as ActionItem;
       })
-      .filter((item) => {
-        if (item.domain === "button") return true;
-        if (item.kind === "router") return true;
-        return Boolean(item.band);
-      });
+      .filter((item): item is ActionItem => item !== null);
   }
 
   private _getRouterEntityId(entryId: string | undefined): string | undefined {
@@ -666,10 +589,7 @@ export class TplinkRouterCard extends LitElement {
 
   private _getRouterDevice(entryId: string | undefined): DeviceRegistryEntry | undefined {
     if (!entryId || this._entityRegistry.length === 0) return undefined;
-    const entryDevices = this._entityRegistry
-      .filter((entry) => entry.config_entry_id === entryId && entry.device_id)
-      .map((entry) => entry.device_id as string);
-    const devices = entryDevices
+    const devices = preferredRouterDeviceIds(this._entityRegistry, entryId)
       .map((id) => this._deviceRegistry.find((device) => device.id === id))
       .filter((device) => device !== undefined) as DeviceRegistryEntry[];
     if (devices.length === 0) return undefined;
@@ -812,6 +732,81 @@ export class TplinkRouterCard extends LitElement {
     return { model, manufacturer, swVersion, hwVersion, mac };
   }
 
+  private _buildDebugExportPayload() {
+    const entryId = this._selectedEntryId;
+    const selectedEntry = entryId
+      ? this._entries.find((entry) => entry.entry_id === entryId)
+      : undefined;
+    const entryRegistry = entryId
+      ? this._entityRegistry.filter((entry) => entry.config_entry_id === entryId)
+      : this._entityRegistry;
+    const relatedDeviceIds = new Set(
+      entryRegistry
+        .map((entry) => entry.device_id)
+        .filter((value): value is string => typeof value === "string" && value.length > 0),
+    );
+    const relatedDevices = this._deviceRegistry.filter((device) => relatedDeviceIds.has(device.id));
+    const states = entryRegistry
+      .map((entry) => this.hass?.states[entry.entity_id])
+      .filter((state): state is HassEntity => state !== undefined);
+    const rows = this._getEntityRows();
+
+    return {
+      meta: {
+        card: "ha-tplink-router-card",
+        version: CARD_VERSION,
+        exported_at: new Date().toISOString(),
+        selected_adapter:
+          selectedEntry?.domain === "omada" || selectedEntry?.domain === "tplink_omada"
+            ? "omada"
+            : "tplink_router",
+      },
+      selection: {
+        entry_id: entryId ?? null,
+        entry_title: selectedEntry?.title ?? null,
+        entry_domain: selectedEntry?.domain ?? null,
+      },
+      ui_state: {
+        search: this._filter,
+        filters: this._filters,
+        sorts: this._sorts,
+      },
+      config: this._config ?? null,
+      capture_summary: {
+        rows: rows.length,
+        entity_registry: entryRegistry.length,
+        device_registry: relatedDevices.length,
+        states: states.length,
+      },
+      rows,
+      entity_registry: entryRegistry,
+      device_registry: relatedDevices,
+      states,
+    };
+  }
+
+  private _downloadDebugExport() {
+    const payload = buildDiagnosticPackage(this._buildDebugExportPayload(), {
+      limits: {
+        maxDepth: 8,
+        maxNodes: 30_000,
+        maxArrayLength: 4_000,
+        maxObjectKeys: 300,
+        maxStringLength: 2_000,
+      },
+    });
+    const blob = new Blob([JSON.stringify(payload, null, 2)], { type: "application/json" });
+    const href = URL.createObjectURL(blob);
+    const anchor = document.createElement("a");
+    const stamp = new Date().toISOString().replace(/[:.]/g, "-");
+    anchor.href = href;
+    anchor.download = `tplink-router-card-export-${stamp}.json`;
+    document.body.appendChild(anchor);
+    anchor.click();
+    anchor.remove();
+    URL.revokeObjectURL(href);
+  }
+
   private _startHold(ev: PointerEvent, item: ActionItem) {
     if (!item.requiresHold) return;
     if (!item.available) return;
@@ -873,6 +868,10 @@ export class TplinkRouterCard extends LitElement {
       localize(this.hass, key, vars);
 
     const entryId = this._selectedEntryId;
+    const selectedEntry = entryId
+      ? this._entries.find((entry) => entry.entry_id === entryId)
+      : undefined;
+    const entryDomain = selectedEntry?.domain;
     const rows = this._getEntityRows();
     const availableBands = new Set(rows.map((row) => row.bandType).filter((b) => b !== "unknown"));
     const availableConnections = new Set(
@@ -941,12 +940,12 @@ export class TplinkRouterCard extends LitElement {
         label: t("columns.packetsReceived"),
         sort: (row: RowData) => row.packetsReceivedValue,
       },
-      { key: "up", label: t("columns.up"), sort: (row: RowData) => row.upSpeedValue },
       {
         key: "down",
         label: t("columns.down"),
         sort: (row: RowData) => row.downSpeedValue,
       },
+      { key: "up", label: t("columns.up"), sort: (row: RowData) => row.upSpeedValue },
       { key: "tx", label: t("columns.tx"), sort: (row: RowData) => row.txRateValue },
       { key: "rx", label: t("columns.rx"), sort: (row: RowData) => row.rxRateValue },
       {
@@ -969,9 +968,9 @@ export class TplinkRouterCard extends LitElement {
         : defaultColumnKeys;
     const deduped = Array.from(new Set(selectedColumns)).filter((key) => key !== "name");
     const displayColumns = [
-      columnMap.get("name")!,
-      ...deduped.map((key) => columnMap.get(key)).filter(Boolean),
-    ];
+      columnMap.get("name"),
+      ...deduped.map((key) => columnMap.get(key)),
+    ].filter((col): col is (typeof columns)[number] => col !== undefined);
 
     const allowedSortKeys = new Set(displayColumns.map((col) => col.key));
     const activeSorts = this._sorts.filter((sort) => allowedSortKeys.has(sort.key));
@@ -995,24 +994,89 @@ export class TplinkRouterCard extends LitElement {
 
     const onlineCount = rows.filter((row) => row.isOnline).length;
     const colorizeRates = Boolean(this._config?.txrx_color);
-    const actionItems = this._getActionItems(entryId);
+    const colorizeUpDown = Boolean(this._config?.updown_color);
+    const upSpeedValues = rows
+      .filter((row) => row.isOnline)
+      .map((row) => row.upSpeedValue)
+      .filter((value): value is number => typeof value === "number" && Number.isFinite(value));
+    const downSpeedValues = rows
+      .filter((row) => row.isOnline)
+      .map((row) => row.downSpeedValue)
+      .filter((value): value is number => typeof value === "number" && Number.isFinite(value));
+    const upSpeedScale = resolveSpeedScale(
+      upSpeedValues,
+      this._config?.upload_speed_color_max,
+    );
+    const downSpeedScale = resolveSpeedScale(
+      downSpeedValues,
+      this._config?.download_speed_color_max,
+    );
+    const renderSpeedCell = (
+      mbps: number | null,
+      displayValue: string,
+      scaleMax: number,
+      colorized: boolean,
+    ) => {
+      if (mbps === null || !Number.isFinite(mbps) || mbps <= 0) return displayValue;
+      const safeMax = Math.max(scaleMax, 1);
+      const percent = Math.max(0, Math.min(100, (mbps / safeMax) * 100));
+      return html`
+        <span class="speed-value">
+          ${colorized
+            ? html`<span class="rate ${updownRateClass(mbps, 0, safeMax)}">${displayValue}</span>`
+            : displayValue}
+          <span class="speed-tooltip" role="tooltip">
+            <span class="speed-tooltip-bar-track">
+              <span
+                class="speed-tooltip-bar-fill"
+                style=${`--fill:${percent.toFixed(2)}%`}
+              ></span>
+            </span>
+            <span class="speed-tooltip-line">
+              ${t("card.speedTooltipUsage", { value: percent.toFixed(1) })}
+            </span>
+            <span class="speed-tooltip-line">
+              ${t("card.speedTooltipTransfer", {
+                value: formatSpeed((mbps * 1_000_000) / 8, "MBps"),
+              })}
+            </span>
+            <span class="speed-tooltip-line">
+              ${t("card.speedTooltipMbps", {
+                value: formatTooltipMetric(mbps),
+                max: formatTooltipMetric(safeMax),
+              })}
+            </span>
+          </span>
+        </span>
+      `;
+    };
+    const actionItems = this._getActionItems(entryId, entryDomain);
     const holdSeconds = Math.max(1, Math.round(HOLD_DURATION_MS / 1000));
     const routerEntityId = this._getRouterEntityId(entryId);
-    const entryTitle = entryId
-      ? this._entries.find((entry) => entry.entry_id === entryId)?.title
-      : undefined;
+    const entryTitle = selectedEntry?.title;
     const entryStates = this._getEntryStates(entryId);
+    const nonTrackerEntryStates = entryStates.filter(
+      (state) => !state.entity_id.startsWith("device_tracker."),
+    );
+    const routerEntityDeviceId = routerEntityId
+      ? this._getDeviceIdForEntity(routerEntityId)
+      : undefined;
     const entryIp = extractIp(entryTitle);
-    const preferredDeviceId = entryIp ? this._findDeviceIdByIp(entryStates, entryIp) : undefined;
+    const preferredDeviceId = entryIp
+      ? this._findDeviceIdByIp(nonTrackerEntryStates, entryIp)
+      : undefined;
     const routerDevice =
+      (routerEntityDeviceId
+        ? this._deviceRegistry.find((device) => device.id === routerEntityDeviceId)
+        : undefined) ??
       (preferredDeviceId
         ? this._deviceRegistry.find((device) => device.id === preferredDeviceId)
         : undefined) ?? this._getRouterDevice(entryId);
     const routerStatesForDevice = this._getStatesForDevice(entryId, routerDevice?.id);
     const routerStates =
       routerStatesForDevice.length > 0
-        ? routerStatesForDevice
-        : entryStates.filter((state) => !state.entity_id.startsWith("device_tracker."));
+        ? routerStatesForDevice.filter((state) => !state.entity_id.startsWith("device_tracker."))
+        : nonTrackerEntryStates;
     const localUrl = this._getLocalUrl(entryTitle, routerDevice, routerStates);
     const publicIp = this._getPublicIp(routerStates);
     const stats = this._getRouterStats(routerStates);
@@ -1048,14 +1112,47 @@ export class TplinkRouterCard extends LitElement {
           { "2g": 1, "5g": 2, "6g": 3 }[b.band ?? "2g"],
         ),
       ),
-      router: actionItems.filter((item) => item.kind === "router"),
+      router: actionItems
+        .filter((item) => item.kind === "router")
+        .sort((a, b) => {
+          const actionPriority = (item: ActionItem) => {
+            const text = `${item.entity_id} ${item.label}`.toLowerCase();
+            if (text.includes("reconnect")) return 0;
+            if (text.includes("wlan optimization") || text.includes("rf planning")) return 1;
+            if (text.includes("reboot") || text.includes("restart")) return 2;
+            return 10;
+          };
+          const priorityDiff = actionPriority(a) - actionPriority(b);
+          if (priorityDiff !== 0) return priorityDiff;
+          return compareValues(a.label, b.label);
+        }),
     };
 
     return html`
       <ha-card>
         <div class="header">
           <div class="title">
-            <h2>${this._config.title ?? t("card.title")}</h2>
+            <div
+              class="title-main"
+              @dblclick=${this._toggleExportButton}
+            >
+              <h2>${this._config.title ?? t("card.title")}</h2>
+              ${this._showExportButton
+                ? html`
+                    <button
+                      class="title-export-button"
+                      title=${t("card.debugExport")}
+                      @click=${(ev: MouseEvent) => {
+                        ev.preventDefault();
+                        ev.stopPropagation();
+                        this._downloadDebugExport();
+                      }}
+                    >
+                      <ha-icon icon="mdi:download"></ha-icon>
+                    </button>
+                  `
+                : ""}
+            </div>
             <div class="actions">
               ${actionGroups.host.length
                 ? html`
@@ -1523,13 +1620,27 @@ export class TplinkRouterCard extends LitElement {
                               hostname: row.hostname,
                               packetsSent: row.packetsSent,
                               packetsReceived: row.packetsReceived,
-                              up: isOffline ? "—" : row.upSpeed,
-                              down: isOffline ? "—" : row.downSpeed,
+                              up: isOffline
+                                ? "—"
+                                : renderSpeedCell(
+                                    row.upSpeedValue,
+                                    row.upSpeed,
+                                    upSpeedScale.max,
+                                    colorizeUpDown,
+                                  ),
+                              down: isOffline
+                                ? "—"
+                                : renderSpeedCell(
+                                    row.downSpeedValue,
+                                    row.downSpeed,
+                                    downSpeedScale.max,
+                                    colorizeUpDown,
+                                  ),
                               tx: isOffline
                                 ? "—"
                                 : colorizeRates
                                   ? html`
-                                      <span class="rate ${rateClass(row.txRateValue)}">
+                                      <span class="rate ${txrxRateClass(row.txRateValue)}">
                                         ${row.txRate}
                                       </span>
                                     `
@@ -1538,19 +1649,21 @@ export class TplinkRouterCard extends LitElement {
                                 ? "—"
                                 : colorizeRates
                                   ? html`
-                                      <span class="rate ${rateClass(row.rxRateValue)}">
+                                      <span class="rate ${txrxRateClass(row.rxRateValue)}">
                                         ${row.rxRate}
                                       </span>
                                     `
                                   : row.rxRate,
                               online: row.onlineTime,
                               traffic: row.trafficUsage,
-                              signal: html`
-                                <span class="signal">
-                                  <span class="signal-dot" style=${`background:${row.signalColor}`}></span>
-                                  ${row.signal}
-                                </span>
-                              `,
+                              signal: isOffline || row.connectionType === "wired"
+                                ? "—"
+                                : html`
+                                    <span class="signal">
+                                      <span class="signal-dot" style=${`background:${row.signalColor}`}></span>
+                                      ${row.signal}
+                                    </span>
+                                  `,
                             };
                             return html`
                               <tr>
@@ -1584,7 +1697,7 @@ export class TplinkRouterCard extends LitElement {
         { name: "title", selector: { text: {} } },
         {
           name: "entry_id",
-          selector: { config_entry: { integration: "tplink_router" } },
+          selector: { config_entry: {} },
         },
         {
           name: "speed_unit",
@@ -1599,6 +1712,29 @@ export class TplinkRouterCard extends LitElement {
           },
         },
         { name: "txrx_color", selector: { boolean: {} } },
+        { name: "updown_color", selector: { boolean: {} } },
+        {
+          name: "upload_speed_color_max",
+          selector: {
+            number: {
+              mode: "box",
+              min: 0,
+              max: 10000,
+              step: 10,
+            },
+          },
+        },
+        {
+          name: "download_speed_color_max",
+          selector: {
+            number: {
+              mode: "box",
+              min: 0,
+              max: 10000,
+              step: 10,
+            },
+          },
+        },
         {
           name: "columns",
           selector: {
@@ -1615,8 +1751,8 @@ export class TplinkRouterCard extends LitElement {
                 { value: "hostname", label: t("columns.hostname") },
                 { value: "packetsSent", label: t("columns.packetsSent") },
                 { value: "packetsReceived", label: t("columns.packetsReceived") },
-                { value: "up", label: t("columns.up") },
                 { value: "down", label: t("columns.down") },
+                { value: "up", label: t("columns.up") },
                 { value: "tx", label: t("columns.tx") },
                 { value: "rx", label: t("columns.rx") },
                 { value: "online", label: t("columns.online") },
@@ -1637,6 +1773,12 @@ export class TplinkRouterCard extends LitElement {
             return t("editor.speedUnit");
           case "txrx_color":
             return t("editor.txrxColor");
+          case "updown_color":
+            return t("editor.updownColor");
+          case "upload_speed_color_max":
+            return t("editor.uploadSpeedColorMax");
+          case "download_speed_color_max":
+            return t("editor.downloadSpeedColorMax");
           case "columns":
             return t("editor.columns");
           default:
@@ -1649,6 +1791,18 @@ export class TplinkRouterCard extends LitElement {
         }
         if (schema.name === "txrx_color") {
           return t("editor.txrxColorHelp");
+        }
+        if (schema.name === "updown_color") {
+          return t("editor.updownColorHelp");
+        }
+        if (
+          schema.name === "upload_speed_color_max" ||
+          schema.name === "download_speed_color_max"
+        ) {
+          return t("editor.speedColorHelp");
+        }
+        if (schema.name === "entry_id") {
+          return t("editor.routerHelp");
         }
         return "";
       },

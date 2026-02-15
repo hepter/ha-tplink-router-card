@@ -42,6 +42,12 @@ export const normalizeMbps = (value?: number | null) => {
   return value; // assume already Mbps
 };
 
+export const normalizeThroughputMbps = (value?: number | null) => {
+  if (value === null || value === undefined || !Number.isFinite(value)) return null;
+  // tplink_router up/down speed attributes are treated as raw bytes/sec.
+  return (value * 8) / 1_000_000;
+};
+
 export const normalizeLinkMbps = (
   value?: number | null,
   band?: "2g" | "5g" | "6g" | "unknown",
@@ -116,21 +122,42 @@ export const formatLinkSpeed = (
 };
 
 export const formatSpeed = (value?: number | null, unit: "MBps" | "Mbps" = "MBps") => {
-  const mbps = normalizeMbps(value);
-  if (mbps === null) return "—";
-  const raw = unit === "MBps" ? mbps / 8 : mbps;
-  if (unit === "MBps" && raw >= 1000) {
-    const gb = raw / 1000;
-    const decimals = gb >= 100 ? 0 : gb >= 10 ? 1 : 2;
-    return `${gb.toFixed(decimals)} GB/s`;
+  if (value === null || value === undefined || !Number.isFinite(value)) return "—";
+  const bytesPerSecond = value;
+  if (unit === "MBps") {
+    if (bytesPerSecond < 1_000) {
+      const decimals = bytesPerSecond >= 100 ? 0 : bytesPerSecond >= 10 ? 1 : 2;
+      return `${bytesPerSecond.toFixed(decimals)} B/s`;
+    }
+    const kbps = bytesPerSecond / 1_000;
+    if (kbps < 1_000) {
+      const decimals = kbps >= 100 ? 0 : kbps >= 10 ? 1 : 2;
+      return `${kbps.toFixed(decimals)} KB/s`;
+    }
+    const mbps = kbps / 1_000;
+    if (mbps < 1_000) {
+      const decimals = mbps >= 100 ? 0 : mbps >= 10 ? 1 : 2;
+      return `${mbps.toFixed(decimals)} MB/s`;
+    }
+    const gbps = mbps / 1_000;
+    const decimals = gbps >= 100 ? 0 : gbps >= 10 ? 1 : 2;
+    return `${gbps.toFixed(decimals)} GB/s`;
   }
-  if (unit === "Mbps" && raw >= 1000) {
-    const gbps = raw / 1000;
+
+  const mbps = normalizeThroughputMbps(value);
+  if (mbps === null) return "—";
+  if (mbps < 1) {
+    const kbps = mbps * 1_000;
+    const decimals = kbps >= 100 ? 0 : kbps >= 10 ? 1 : 2;
+    return `${kbps.toFixed(decimals)} Kbps`;
+  }
+  if (mbps >= 1_000) {
+    const gbps = mbps / 1_000;
     const decimals = gbps >= 100 ? 0 : gbps >= 10 ? 1 : 2;
     return `${gbps.toFixed(decimals)} Gbps`;
   }
-  const decimals = raw >= 100 ? 0 : raw >= 10 ? 1 : 2;
-  return unit === "MBps" ? `${raw.toFixed(decimals)} MB/s` : `${raw.toFixed(decimals)} Mbps`;
+  const decimals = mbps >= 100 ? 0 : mbps >= 10 ? 1 : 2;
+  return `${mbps.toFixed(decimals)} Mbps`;
 };
 
 export const safeString = (value: unknown) => {

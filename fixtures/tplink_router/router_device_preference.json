@@ -1,0 +1,35 @@
+{
+  "entryId": "entry-router-1",
+  "entityRegistry": [
+    {
+      "entity_id": "device_tracker.client_1",
+      "platform": "tplink_router",
+      "config_entry_id": "entry-router-1",
+      "device_id": "device-client-1"
+    },
+    {
+      "entity_id": "device_tracker.client_2",
+      "platform": "tplink_router",
+      "config_entry_id": "entry-router-1",
+      "device_id": "device-client-2"
+    },
+    {
+      "entity_id": "sensor.tp_link_router_cpu_used",
+      "platform": "tplink_router",
+      "config_entry_id": "entry-router-1",
+      "device_id": "device-router-main"
+    },
+    {
+      "entity_id": "button.tp_link_router_reboot",
+      "platform": "tplink_router",
+      "config_entry_id": "entry-router-1",
+      "device_id": "device-router-main"
+    },
+    {
+      "entity_id": "device_tracker.other_router_client",
+      "platform": "tplink_router",
+      "config_entry_id": "entry-router-2",
+      "device_id": "device-other-client"
+    }
+  ]
+}

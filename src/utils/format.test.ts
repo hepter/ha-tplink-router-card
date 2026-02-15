@@ -7,6 +7,7 @@ import {
   formatMbps,
   formatNumber,
   formatSpeed,
+  normalizeThroughputMbps,
   normalizeLinkMbps,
   normalizeMbps,
   safeString,
@@ -39,6 +40,11 @@ describe("format helpers", () => {
     expect(normalizeMbps(500)).toBe(500);
   });
 
+  it("normalizes throughput Mbps (raw bytes/sec)", () => {
+    expect(normalizeThroughputMbps(16390)).toBeCloseTo(0.13112, 5);
+    expect(normalizeThroughputMbps(500)).toBeCloseTo(0.004, 5);
+  });
+
   it("normalizes link Mbps", () => {
     expect(normalizeLinkMbps(1630)).toBe(1630);
     expect(normalizeLinkMbps(1441170)).toBeCloseTo(1441.17, 2);
@@ -51,8 +57,15 @@ describe("format helpers", () => {
   });
 
   it("formats speed output unit", () => {
-    expect(formatSpeed(16390, "MBps")).toBe("2.05 MB/s");
-    expect(formatSpeed(16390, "Mbps")).toBe("16.4 Mbps");
+    expect(formatSpeed(16390, "MBps")).toBe("16.4 KB/s");
+    expect(formatSpeed(16390, "Mbps")).toBe("131 Kbps");
+    expect(formatSpeed(500, "Mbps")).toBe("4.00 Kbps");
+    expect(formatSpeed(500, "MBps")).toBe("500 B/s");
+  });
+
+  it("formats throughput values from bytes/sec without heuristics", () => {
+    expect(formatSpeed(2_126_415, "MBps")).toBe("2.13 MB/s");
+    expect(formatSpeed(2_126_415, "Mbps")).toBe("17.0 Mbps");
   });
 
   it("formats link speed", () => {

@@ -4,6 +4,7 @@
     "module": "ES2020",
     "moduleResolution": "Bundler",
     "lib": ["ES2020", "DOM"],
+    "types": ["node", "vitest/globals"],
     "strict": true,
     "noEmit": true,
     "skipLibCheck": true

@@ -1,0 +1,81 @@
+{
+  "entryId": "entry-a",
+  "states": {
+    "device_tracker.client_a": {
+      "entity_id": "device_tracker.client_a",
+      "state": "home",
+      "attributes": {
+        "friendly_name": "Client A",
+        "source_type": "router",
+        "ip": "192.168.1.10",
+        "mac": "AA-BB-CC-DD-EE-01",
+        "connection": "host",
+        "band": "5G",
+        "tx_rate": 866700,
+        "rx_rate": 650000,
+        "online_time": 1200,
+        "traffic_usage": 12345678,
+        "signal": -55
+      }
+    },
+    "device_tracker.client_b": {
+      "entity_id": "device_tracker.client_b",
+      "state": "home",
+      "attributes": {
+        "friendly_name": "Client B",
+        "source_type": "router",
+        "ip": "192.168.1.11",
+        "mac": "AA-BB-CC-DD-EE-02",
+        "connection": "wired",
+        "band": null,
+        "tx_rate": 1000,
+        "rx_rate": 1000,
+        "online_time": 300,
+        "traffic_usage": 987654,
+        "signal": null
+      }
+    },
+    "device_tracker.client_other_entry": {
+      "entity_id": "device_tracker.client_other_entry",
+      "state": "home",
+      "attributes": {
+        "friendly_name": "Client C",
+        "source_type": "router",
+        "ip": "192.168.2.10",
+        "mac": "AA-BB-CC-DD-EE-03",
+        "connection": "host",
+        "band": "2G"
+      }
+    },
+    "device_tracker.phone_app": {
+      "entity_id": "device_tracker.phone_app",
+      "state": "home",
+      "attributes": {
+        "friendly_name": "Phone App",
+        "source_type": "gps",
+        "ip": "10.0.0.8",
+        "mac": "AA-BB-CC-DD-EE-99"
+      }
+    }
+  },
+  "entityRegistry": [
+    {
+      "entity_id": "device_tracker.client_a",
+      "platform": "device_tracker",
+      "config_entry_id": "entry-a",
+      "device_id": "dev-client-a"
+    },
+    {
+      "entity_id": "device_tracker.client_b",
+      "platform": "mobile_app",
+      "config_entry_id": "entry-a",
+      "device_id": "dev-client-b"
+    },
+    {
+      "entity_id": "device_tracker.client_other_entry",
+      "platform": "tplink_router",
+      "config_entry_id": "entry-b",
+      "device_id": "dev-client-c"
+    }
+  ]
+}

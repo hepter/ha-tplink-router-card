@@ -2,3 +2,4 @@ node_modules/
 dist/
 *.log
 .DS_Store
+fixtures/tplink_router/live-*.json

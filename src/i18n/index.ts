@@ -1,8 +1,10 @@
-import type { HomeAssistant } from "./types";
+import type { HomeAssistant } from "../core/types";
 import en from "./locales/en.json";
 import tr from "./locales/tr.json";
 
-type Translations = Record<string, string | Translations>;
+interface Translations {
+  [key: string]: string | Translations;
+}
 
 const translations: Record<string, Translations> = {
   en: en as Translations,
