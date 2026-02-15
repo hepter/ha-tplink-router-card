@@ -1,4 +1,4 @@
-import { LitElement, html } from "lit";
+import { LitElement, html, nothing } from "lit";
 import { cardStyles } from "./styles";
 import { localize } from "../i18n";
 import { buildDiagnosticPackage } from "../utils/export-utils";
@@ -100,6 +100,16 @@ type ActionItem = {
   requiresHold: boolean;
 };
 
+type SpeedTooltipState = {
+  visible: boolean;
+  x: number;
+  y: number;
+  percent: string;
+  transfer: string;
+  mbps: string;
+  max: string;
+};
+
 const HOLD_DURATION_MS = 1000;
 const CARD_VERSION = import.meta.env.VITE_CARD_VERSION ?? "dev";
 type RowData = MappedTrackerRow;
@@ -152,6 +162,7 @@ export class TplinkRouterCard extends LitElement {
     _sorts: { state: true },
     _filters: { state: true },
     _showExportButton: { state: true },
+    _speedTooltip: { state: true },
   } as const;
 
   static styles = cardStyles;
@@ -177,6 +188,9 @@ export class TplinkRouterCard extends LitElement {
   private _deviceRegistry: DeviceRegistryEntry[] = [];
   private _filtersLoaded = false;
   private _showExportButton = false;
+  private _speedTooltip: SpeedTooltipState | null = null;
+  private _speedTooltipOpenTimer?: number;
+  private _speedTooltipHideTimer?: number;
 
   setConfig(config: TplinkRouterCardConfig): void {
     const normalized = {
@@ -208,6 +222,18 @@ export class TplinkRouterCard extends LitElement {
   updated(changed: Map<string, unknown>): void {
     if (changed.has("hass")) {
       this._loadRegistries();
+    }
+  }
+
+  disconnectedCallback(): void {
+    super.disconnectedCallback();
+    if (this._speedTooltipOpenTimer !== undefined) {
+      window.clearTimeout(this._speedTooltipOpenTimer);
+      this._speedTooltipOpenTimer = undefined;
+    }
+    if (this._speedTooltipHideTimer !== undefined) {
+      window.clearTimeout(this._speedTooltipHideTimer);
+      this._speedTooltipHideTimer = undefined;
     }
   }
 
@@ -379,6 +405,56 @@ export class TplinkRouterCard extends LitElement {
       nextSorts.push({ key, direction: nextDirection });
     }
     this._sorts = nextSorts;
+  }
+
+  private _openSpeedTooltip(
+    event: MouseEvent,
+    details: Omit<SpeedTooltipState, "visible" | "x" | "y">,
+  ) {
+    const target = event.currentTarget as HTMLElement | null;
+    if (!target) return;
+    if (this._speedTooltipHideTimer !== undefined) {
+      window.clearTimeout(this._speedTooltipHideTimer);
+      this._speedTooltipHideTimer = undefined;
+    }
+    if (this._speedTooltipOpenTimer !== undefined) {
+      window.clearTimeout(this._speedTooltipOpenTimer);
+      this._speedTooltipOpenTimer = undefined;
+    }
+    const rect = target.getBoundingClientRect();
+    const tooltipWidth = 180;
+    const viewportPadding = 10;
+    const centerX = rect.left + rect.width / 2;
+    const minX = tooltipWidth / 2 + viewportPadding;
+    const maxX = window.innerWidth - tooltipWidth / 2 - viewportPadding;
+    const clampedX = Math.max(minX, Math.min(maxX, centerX));
+    const nextTooltip: SpeedTooltipState = {
+      visible: false,
+      x: clampedX,
+      y: rect.top - 8,
+      ...details,
+    };
+    this._speedTooltip = nextTooltip;
+    this._speedTooltipOpenTimer = window.setTimeout(() => {
+      this._speedTooltip = { ...nextTooltip, visible: true };
+      this._speedTooltipOpenTimer = undefined;
+    }, 160);
+  }
+
+  private _closeSpeedTooltip() {
+    if (this._speedTooltipOpenTimer !== undefined) {
+      window.clearTimeout(this._speedTooltipOpenTimer);
+      this._speedTooltipOpenTimer = undefined;
+    }
+    if (!this._speedTooltip) return;
+    this._speedTooltip = { ...this._speedTooltip, visible: false };
+    if (this._speedTooltipHideTimer !== undefined) {
+      window.clearTimeout(this._speedTooltipHideTimer);
+    }
+    this._speedTooltipHideTimer = window.setTimeout(() => {
+      this._speedTooltip = null;
+      this._speedTooltipHideTimer = undefined;
+    }, 200);
   }
 
   private _showMoreInfo(entityId: string) {
@@ -1020,33 +1096,21 @@ export class TplinkRouterCard extends LitElement {
       if (mbps === null || !Number.isFinite(mbps) || mbps <= 0) return displayValue;
       const safeMax = Math.max(scaleMax, 1);
       const percent = Math.max(0, Math.min(100, (mbps / safeMax) * 100));
+      const tooltipDetails = {
+        percent: percent.toFixed(1),
+        transfer: formatSpeed((mbps * 1_000_000) / 8, "MBps"),
+        mbps: formatTooltipMetric(mbps),
+        max: formatTooltipMetric(safeMax),
+      };
       return html`
-        <span class="speed-value">
+        <span
+          class="speed-value"
+          @mouseenter=${(ev: MouseEvent) => this._openSpeedTooltip(ev, tooltipDetails)}
+          @mouseleave=${() => this._closeSpeedTooltip()}
+        >
           ${colorized
             ? html`<span class="rate ${updownRateClass(mbps, 0, safeMax)}">${displayValue}</span>`
             : displayValue}
-          <span class="speed-tooltip" role="tooltip">
-            <span class="speed-tooltip-bar-track">
-              <span
-                class="speed-tooltip-bar-fill"
-                style=${`--fill:${percent.toFixed(2)}%`}
-              ></span>
-            </span>
-            <span class="speed-tooltip-line">
-              ${t("card.speedTooltipUsage", { value: percent.toFixed(1) })}
-            </span>
-            <span class="speed-tooltip-line">
-              ${t("card.speedTooltipTransfer", {
-                value: formatSpeed((mbps * 1_000_000) / 8, "MBps"),
-              })}
-            </span>
-            <span class="speed-tooltip-line">
-              ${t("card.speedTooltipMbps", {
-                value: formatTooltipMetric(mbps),
-                max: formatTooltipMetric(safeMax),
-              })}
-            </span>
-          </span>
         </span>
       `;
     };
@@ -1678,6 +1742,36 @@ export class TplinkRouterCard extends LitElement {
                     </table>
                   </div>
                 `}
+        ${this._speedTooltip
+          ? html`
+              <span
+                class="speed-tooltip speed-tooltip--portal ${this._speedTooltip.visible
+                  ? "speed-tooltip--visible"
+                  : ""}"
+                role="tooltip"
+                style=${`left:${this._speedTooltip.x}px; top:${this._speedTooltip.y}px;`}
+              >
+                <span class="speed-tooltip-bar-track">
+                  <span
+                    class="speed-tooltip-bar-fill"
+                    style=${`--fill:${this._speedTooltip.percent}%`}
+                  ></span>
+                </span>
+                <span class="speed-tooltip-line">
+                  ${t("card.speedTooltipUsage", { value: this._speedTooltip.percent })}
+                </span>
+                <span class="speed-tooltip-line">
+                  ${t("card.speedTooltipTransfer", { value: this._speedTooltip.transfer })}
+                </span>
+                <span class="speed-tooltip-line">
+                  ${t("card.speedTooltipMbps", {
+                    value: this._speedTooltip.mbps,
+                    max: this._speedTooltip.max,
+                  })}
+                </span>
+              </span>
+            `
+          : nothing}
       </ha-card>
     `;
   }

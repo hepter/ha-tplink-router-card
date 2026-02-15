@@ -507,7 +507,24 @@ export const cardStyles = css`
     transform: translateX(-50%) translateY(0);
   }
 
+  .speed-tooltip.speed-tooltip--portal {
+    position: fixed;
+    left: 0;
+    top: 0;
+    bottom: auto;
+    opacity: 0;
+    transform: translate(-50%, -96%);
+    transition: opacity 0.2s ease, transform 0.2s ease;
+    z-index: 1000;
+  }
+
+  .speed-tooltip.speed-tooltip--portal.speed-tooltip--visible {
+    opacity: 1;
+    transform: translate(-50%, -100%);
+  }
+
   .speed-tooltip-bar-track {
+    position: relative;
     display: block;
     height: 3px;
     border-radius: 999px;
@@ -517,11 +534,18 @@ export const cardStyles = css`
   }
 
   .speed-tooltip-bar-fill {
-    display: block;
-    height: 100%;
-    width: var(--fill, 0%);
+    position: absolute;
+    inset: 0;
+    width: 100%;
     border-radius: 999px;
-    background: linear-gradient(90deg, #38bdf8, #f97316, #ef4444);
+    clip-path: inset(0 calc(100% - var(--fill, 0%)) 0 0 round 999px);
+    background: linear-gradient(
+      90deg,
+      #38bdf8 0%,
+      #38bdf8 55%,
+      #f97316 82%,
+      #ef4444 100%
+    );
   }
 
   .speed-tooltip-line {
