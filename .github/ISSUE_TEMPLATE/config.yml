@@ -1,0 +1,5 @@
+blank_issues_enabled: false
+contact_links:
+  - name: Setup and diagnostics guide
+    url: https://github.com/hepter/ha-tplink-router-card#diagnostics-export
+    about: Check the troubleshooting and diagnostics steps before opening a bug
