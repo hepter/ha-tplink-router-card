@@ -1,0 +1,25 @@
+{
+  "entryId": "entry-tplink-omada-1",
+  "states": {
+    "device_tracker.m11pc_wifi": {
+      "entity_id": "device_tracker.m11pc_wifi",
+      "state": "home",
+      "attributes": {
+        "friendly_name": "VM Client WiFi",
+        "source_type": "router",
+        "ip": "10.50.0.21",
+        "mac": "02-50-00-00-00-21",
+        "host_name": "vm-client-01",
+        "wireless": true
+      }
+    }
+  },
+  "entityRegistry": [
+    {
+      "entity_id": "device_tracker.m11pc_wifi",
+      "platform": "tplink_omada",
+      "config_entry_id": "entry-tplink-omada-1",
+      "device_id": "client-device-m11pc"
+    }
+  ]
+}

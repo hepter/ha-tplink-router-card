@@ -101,4 +101,67 @@ describe("tplink adapter contract fixtures", () => {
     expect(row.txRate).toBe("65.0 Mbps");
     expect(row.rxRate).toBe("52.0 Mbps");
   });
+
+  it("maps connection_type fallback and infers band for deco-like trackers", () => {
+    const fixture = loadFixture<{
+      state: HassEntity;
+      speedUnit: "MBps" | "Mbps";
+      expected: {
+        connection: string;
+        connectionType: "wifi";
+        band: string;
+        bandType: "2g";
+      };
+    }>("connection_type_band_mapping.json");
+
+    const linkRateUnit = detectLinkRateUnit([fixture.state]);
+    const row = mapTrackerStateToRow(fixture.state, fixture.speedUnit, linkRateUnit);
+
+    expect(row.connection).toBe(fixture.expected.connection);
+    expect(row.connectionType).toBe(fixture.expected.connectionType);
+    expect(row.band).toBe(fixture.expected.band);
+    expect(row.bandType).toBe(fixture.expected.bandType);
+  });
+
+  it("does not fall back to other entries when selected entry has no tracker match", () => {
+    const states: Record<string, HassEntity> = {
+      "device_tracker.client_a": {
+        entity_id: "device_tracker.client_a",
+        state: "home",
+        attributes: { source_type: "router" },
+      },
+      "device_tracker.client_b": {
+        entity_id: "device_tracker.client_b",
+        state: "home",
+        attributes: { source_type: "router" },
+      },
+    };
+    const entityRegistry: EntityRegistryEntry[] = [
+      {
+        entity_id: "device_tracker.client_a",
+        platform: "tplink_router",
+        config_entry_id: "entry-a",
+      },
+      {
+        entity_id: "device_tracker.client_b",
+        platform: "tplink_deco",
+        config_entry_id: "entry-b",
+      },
+    ];
+
+    const selected = selectRouterTrackers(states, entityRegistry, "entry-c", false);
+    expect(selected).toEqual([]);
+  });
+
+  it("returns empty while registry is still loading for a selected entry", () => {
+    const states: Record<string, HassEntity> = {
+      "device_tracker.client_a": {
+        entity_id: "device_tracker.client_a",
+        state: "home",
+        attributes: { source_type: "router" },
+      },
+    };
+    const selected = selectRouterTrackers(states, [], "entry-a", false);
+    expect(selected).toEqual([]);
+  });
 });

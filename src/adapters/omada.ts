@@ -3,6 +3,7 @@ import {
   formatDuration,
   formatLinkSpeed,
   formatNumber,
+  normalizeLinkMbps,
   safeString,
 } from "../utils/format";
 import {
@@ -36,17 +37,25 @@ const defaultMetrics = (): OmadaClientMetrics => ({
   uptimeSeconds: null,
 });
 
+const isDeviceTrackerEntity = (state: HassEntity) =>
+  state.entity_id.startsWith("device_tracker.");
+
+const toText = (value: unknown) => String(value ?? "").trim();
+
 const isOmadaTracker = (state: HassEntity) => {
-  if (!state.entity_id.startsWith("device_tracker.")) return false;
+  if (!isDeviceTrackerEntity(state)) return false;
   const attrs = state.attributes as Record<string, unknown>;
-  if (attrs.source_type !== "router") return false;
+  const sourceType = String(attrs.source_type ?? "").toLowerCase();
+  if (sourceType && sourceType !== "router") return false;
   return (
     "wireless" in attrs ||
     "guest" in attrs ||
     "ssid" in attrs ||
     "ap_name" in attrs ||
     "ap_mac" in attrs ||
-    "switch_port" in attrs
+    "switch_port" in attrs ||
+    "channel_width" in attrs ||
+    "radio" in attrs
   );
 };
 
@@ -92,13 +101,64 @@ const resolveConnection = (
   const guest = attrs.guest === true || String(attrs.guest).toLowerCase() === "true";
   const wireless =
     attrs.wireless === true || String(attrs.wireless).toLowerCase() === "true";
+  const switchLinked =
+    attrs.switch_port !== undefined ||
+    attrs.switchPort !== undefined ||
+    attrs.standard_port !== undefined ||
+    attrs.switch_name !== undefined ||
+    attrs.switchName !== undefined ||
+    attrs.switch_mac !== undefined ||
+    attrs.switchMac !== undefined;
+  const apLinked =
+    attrs.ap_name !== undefined ||
+    attrs.apName !== undefined ||
+    attrs.ap_mac !== undefined ||
+    attrs.apMac !== undefined ||
+    attrs.ssid !== undefined;
+  const connectionText = [
+    attrs.connection,
+    attrs.connect_type,
+    attrs.connectType,
+    attrs.connect_dev_type,
+    attrs.connectDevType,
+    attrs.network_name,
+    attrs.networkName,
+  ]
+    .map((value) => toText(value).toLowerCase())
+    .join(" ");
+  const deviceTypeText = toText(attrs.type).toLowerCase();
 
   if (guest) return { label: "Guest", type: "guest" };
   if (wireless) return { label: "WiFi", type: "wifi" };
+  if (switchLinked) return { label: "Wired", type: "wired" };
+  if (apLinked) return { label: "WiFi", type: "wifi" };
   if (attrs.wireless === false || String(attrs.wireless).toLowerCase() === "false") {
     return { label: "Wired", type: "wired" };
   }
-  return { label: safeString(attrs.connection ?? "WiFi"), type: "wifi" };
+  if (
+    connectionText.includes("wired") ||
+    connectionText.includes("ethernet") ||
+    connectionText.includes("lan") ||
+    connectionText.includes("switch") ||
+    connectionText.includes("gateway")
+  ) {
+    return { label: "Wired", type: "wired" };
+  }
+  if (
+    connectionText.includes("wifi") ||
+    connectionText.includes("wireless") ||
+    connectionText.includes("wlan") ||
+    connectionText.includes("ap")
+  ) {
+    return { label: "WiFi", type: "wifi" };
+  }
+  if (deviceTypeText === "gateway") return { label: "Gateway", type: "unknown" };
+  if (deviceTypeText === "switch") return { label: "Switch", type: "unknown" };
+  if (deviceTypeText === "ap") return { label: "Access Point", type: "unknown" };
+  if (attrs.ip !== undefined || attrs.ip_address !== undefined || attrs.mac !== undefined) {
+    return { label: "Wired", type: "wired" };
+  }
+  return { label: safeString(attrs.connection ?? attrs.type ?? "—"), type: "unknown" };
 };
 
 const parseUptimeSeconds = (value: unknown): number | null => {
@@ -137,6 +197,17 @@ const formatTransferSpeed = (mbPerSecond: number | null, unit: "MBps" | "Mbps") 
   return `${mbps.toFixed(decimals)} Mbps`;
 };
 
+const resolveLinkRateRaw = (
+  attrs: Record<string, unknown>,
+  aliases: string[],
+): number | null => {
+  for (const key of aliases) {
+    const value = toNumber(attrs[key]);
+    if (value !== null) return value;
+  }
+  return null;
+};
+
 const mapSensorMetric = (state: HassEntity, target: OmadaClientMetrics) => {
   const id = state.entity_id.toLowerCase();
   const name = String((state.attributes as Record<string, unknown>).friendly_name ?? "")
@@ -144,27 +215,35 @@ const mapSensorMetric = (state: HassEntity, target: OmadaClientMetrics) => {
     .trim();
   const text = `${id} ${name}`;
 
-  if (text.includes("downloaded")) {
+  if (text.includes("downloaded") || /\bdownload\b/.test(text)) {
     target.downloadedMB = toNumber(state.state);
     return;
   }
-  if (text.includes("uploaded")) {
+  if (text.includes("uploaded") || /\bupload\b/.test(text)) {
     target.uploadedMB = toNumber(state.state);
     return;
   }
-  if (text.includes("rx_activity") || text.includes("rx activity")) {
+  if (
+    text.includes("rx_activity") ||
+    text.includes("rx activity") ||
+    (/\brx\b/.test(text) && !text.includes("utilization"))
+  ) {
     target.rxActivityMBps = toNumber(state.state);
     return;
   }
-  if (text.includes("tx_activity") || text.includes("tx activity")) {
+  if (
+    text.includes("tx_activity") ||
+    text.includes("tx activity") ||
+    (/\btx\b/.test(text) && !text.includes("utilization"))
+  ) {
     target.txActivityMBps = toNumber(state.state);
     return;
   }
-  if (text.includes("rssi")) {
+  if (text.includes("rssi") || text.includes("signal")) {
     target.rssi = toNumber(state.state);
     return;
   }
-  if (text.includes("uptime")) {
+  if (text.includes("uptime") || text.includes("duration") || text.includes("connected")) {
     target.uptimeSeconds = parseUptimeSeconds(state.state);
   }
 };
@@ -198,7 +277,9 @@ export const selectOmadaTrackers = (
 ) => {
   const allOmadaTrackers = Object.values(allStates).filter((state) => isOmadaTracker(state));
 
-  if (!entryId || registryFailed || entityRegistry.length === 0) return allOmadaTrackers;
+  if (!entryId) return allOmadaTrackers;
+  if (!registryFailed && entityRegistry.length === 0) return [];
+  if (registryFailed || entityRegistry.length === 0) return allOmadaTrackers;
 
   const registryTrackersForEntry = entityRegistry
     .filter((entry) => entry.config_entry_id === entryId)
@@ -207,7 +288,7 @@ export const selectOmadaTrackers = (
   const selected = registryTrackersForEntry
     .map((entry) => allStates[entry.entity_id])
     .filter((state): state is HassEntity => state !== undefined)
-    .filter((state) => isOmadaTracker(state));
+    .filter((state) => isDeviceTrackerEntity(state));
 
   if (selected.length > 0) return selected;
 
@@ -215,7 +296,27 @@ export const selectOmadaTrackers = (
   const matchedByRegistry = allOmadaTrackers.filter(
     (state) => byEntityId.get(state.entity_id) === entryId,
   );
-  return matchedByRegistry.length > 0 ? matchedByRegistry : allOmadaTrackers;
+  if (matchedByRegistry.length > 0) return matchedByRegistry;
+
+  const entryDeviceIds = new Set(
+    entityRegistry
+      .filter((entry) => entry.config_entry_id === entryId && entry.device_id)
+      .map((entry) => entry.device_id as string),
+  );
+  if (entryDeviceIds.size > 0) {
+    const trackerDeviceByEntity = new Map(
+      entityRegistry
+        .filter((entry) => entry.entity_id.startsWith("device_tracker.") && entry.device_id)
+        .map((entry) => [entry.entity_id, entry.device_id as string] as const),
+    );
+    const trackerByDevice = allOmadaTrackers.filter((state) => {
+      const deviceId = trackerDeviceByEntity.get(state.entity_id);
+      return deviceId ? entryDeviceIds.has(deviceId) : false;
+    });
+    if (trackerByDevice.length > 0) return trackerByDevice;
+  }
+
+  return [];
 };
 
 export const mapOmadaStateToRow = (
@@ -232,31 +333,71 @@ export const mapOmadaStateToRow = (
     bandType === "2g" ? "2G" : bandType === "5g" ? "5G" : bandType === "6g" ? "6G" : "—";
 
   const ip = safeString(attrs.ip ?? attrs.ip_address ?? "—");
-  const mac = safeString(attrs.mac ?? attrs.mac_address ?? "—");
-  const hostname = safeString(attrs.host_name ?? attrs.hostname ?? attrs.name ?? "—");
+  const mac = safeString(attrs.mac ?? attrs.mac_address ?? attrs.client_mac ?? "—");
+  const hostname = safeString(
+    attrs.host_name ?? attrs.hostname ?? attrs.hostName ?? attrs.name ?? attrs.model ?? "—",
+  );
 
-  const packetsSentValue = toNumber(attrs.packets_sent ?? attrs.up_packet);
-  const packetsReceivedValue = toNumber(attrs.packets_received ?? attrs.down_packet);
+  const packetsSentValue = toNumber(attrs.packets_sent ?? attrs.up_packet ?? attrs.upPacket);
+  const packetsReceivedValue = toNumber(
+    attrs.packets_received ?? attrs.down_packet ?? attrs.downPacket,
+  );
 
   const upMBps = metrics?.txActivityMBps ?? null;
   const downMBps = metrics?.rxActivityMBps ?? null;
   const upSpeedValue = upMBps !== null ? upMBps * 8 : null;
   const downSpeedValue = downMBps !== null ? downMBps * 8 : null;
 
-  const txRateValue = upSpeedValue;
-  const rxRateValue = downSpeedValue;
+  const txRateRaw = resolveLinkRateRaw(attrs, [
+    "tx_rate",
+    "txRate",
+    "link_tx_rate",
+    "linkTxRate",
+    "tx_link_speed",
+    "txLinkSpeed",
+  ]);
+  const rxRateRaw = resolveLinkRateRaw(attrs, [
+    "rx_rate",
+    "rxRate",
+    "link_rx_rate",
+    "linkRxRate",
+    "rx_link_speed",
+    "rxLinkSpeed",
+  ]);
+  const txRateValue = normalizeLinkMbps(txRateRaw, bandType, "auto");
+  const rxRateValue = normalizeLinkMbps(rxRateRaw, bandType, "auto");
 
   const downloadedMB = metrics?.downloadedMB ?? null;
   const uploadedMB = metrics?.uploadedMB ?? null;
+  const trafficDownBytes = toNumber(attrs.traffic_down ?? attrs.trafficDown);
+  const trafficUpBytes = toNumber(attrs.traffic_up ?? attrs.trafficUp);
+  const fallbackTraffic = toNumber(attrs.traffic_usage);
   const totalTrafficMB =
-    downloadedMB !== null || uploadedMB !== null
-      ? (downloadedMB ?? 0) + (uploadedMB ?? 0)
-      : null;
+    downloadedMB !== null || uploadedMB !== null ? (downloadedMB ?? 0) + (uploadedMB ?? 0) : null;
   const trafficUsageValue =
-    totalTrafficMB !== null ? totalTrafficMB * 1024 * 1024 : null;
+    totalTrafficMB !== null
+      ? totalTrafficMB * 1024 * 1024
+      : trafficDownBytes !== null || trafficUpBytes !== null
+        ? (trafficDownBytes ?? 0) + (trafficUpBytes ?? 0)
+        : fallbackTraffic;
 
-  const onlineTimeValue = metrics?.uptimeSeconds ?? null;
+  const onlineTimeValue =
+    metrics?.uptimeSeconds ??
+    parseUptimeSeconds(attrs.uptime ?? attrs.online_time ?? attrs.connected_since) ??
+    null;
   const signalValue = toNumber(attrs.rssi ?? attrs.signal) ?? metrics?.rssi ?? null;
+  const deviceTypeRaw = toText(attrs.type);
+  const deviceType =
+    deviceTypeRaw.toLowerCase() === "ap"
+      ? "Access Point"
+      : deviceTypeRaw.toLowerCase() === "gateway"
+        ? "Gateway"
+        : deviceTypeRaw.toLowerCase() === "switch"
+          ? "Switch"
+          : safeString(attrs.connect_dev_type ?? attrs.connectDevType ?? "—");
+  const deviceModel = safeString(attrs.model ?? attrs.device_model ?? "—");
+  const deviceFirmware = safeString(attrs.firmware ?? attrs.firmware_version ?? "—");
+  const deviceStatus = safeString(attrs.status ?? attrs.status_category ?? "—");
 
   return {
     entity_id: state.entity_id,
@@ -281,9 +422,9 @@ export const mapOmadaStateToRow = (
     upSpeedValue,
     downSpeed: formatTransferSpeed(downMBps, speedUnit),
     downSpeedValue,
-    txRate: formatLinkSpeed(txRateValue, bandType, "mbps"),
+    txRate: formatLinkSpeed(txRateRaw, bandType, "auto"),
     txRateValue,
-    rxRate: formatLinkSpeed(rxRateValue, bandType, "mbps"),
+    rxRate: formatLinkSpeed(rxRateRaw, bandType, "auto"),
     rxRateValue,
     onlineTime: formatDuration(onlineTimeValue),
     onlineTimeValue,
@@ -292,5 +433,9 @@ export const mapOmadaStateToRow = (
     signal: signalValue !== null ? `${signalValue} dBm` : "—",
     signalValue,
     signalColor: signalColor(signalValue),
+    deviceType,
+    deviceModel,
+    deviceFirmware,
+    deviceStatus,
   };
 };

@@ -5,8 +5,8 @@
     "attributes": {
       "friendly_name": "Client IoT 1",
       "source_type": "router",
-      "ip": "192.168.1.244",
-      "mac": "0C-DC-7E-62-A0-84",
+      "ip": "10.77.50.52",
+      "mac": "02-77-50-00-00-52",
       "host_name": "client-iot-1",
       "connection": "IoT",
       "band": "2G",

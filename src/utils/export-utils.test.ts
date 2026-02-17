@@ -16,8 +16,8 @@ describe("export redaction", () => {
   });
 
   it("redacts ip and mac", () => {
-    expect(redactIp("192.168.1.110")).toBe("192.xxx.xxx.110");
-    expect(redactMac("F4-4E-E3-94-DE-28")).toBe("F4-**-**-**-**-28");
+    expect(redactIp("10.77.50.31")).toBe("10.xxx.xxx.31");
+    expect(redactMac("02-77-50-00-00-31")).toBe("02-**-**-**-**-31");
   });
 
   it("redacts url host and query", () => {
@@ -29,23 +29,23 @@ describe("export redaction", () => {
   it("recursively redacts sensitive fields and token-like values", () => {
     const input = {
       entry_id: "entry-sample-1",
-      local_ip: "192.168.1.1",
+      local_ip: "10.77.50.1",
       host_name: "ClientPC",
-      router_url: "http://192.168.1.1/?auth=abcd",
+      router_url: "http://10.77.50.1/?auth=abcd",
       auth_blob:
         "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiIxMjM0NTYifQ.s9M9Y2hhbmdl",
       nested: {
-        mac: "F4-4E-E3-94-DE-28",
+        mac: "02-77-50-00-00-31",
         safe: "unchanged",
       },
     };
     const out = redactExportData(input);
     expect(out.entry_id).toBe("entry-sample-1");
-    expect(out.local_ip).toBe("192.xxx.xxx.1");
+    expect(out.local_ip).toBe("10.xxx.xxx.1");
     expect(out.host_name).toBe("Cl***PC");
-    expect(out.router_url).toBe("http://192.xxx.xxx.1/?***");
+    expect(out.router_url).toBe("http://10.xxx.xxx.1/?***");
     expect(out.auth_blob).toMatch(/\*\*\*/);
-    expect(out.nested.mac).toBe("F4-**-**-**-**-28");
+    expect(out.nested.mac).toBe("02-**-**-**-**-31");
     expect(out.nested.safe).toBe("unchanged");
   });
 
@@ -78,7 +78,7 @@ describe("export redaction", () => {
         filters: { band: "5g", connection: "wifi", status: "online" },
       },
       state: {
-        ip: "192.168.1.110",
+        ip: "10.77.50.31",
         token: "Bearer abcdefghijklmnopqrstuvwxyz",
       },
     };
@@ -89,7 +89,7 @@ describe("export redaction", () => {
     expect(pkg.masked).toBeTruthy();
     const masked = pkg.masked as Record<string, unknown>;
     const maskedState = masked.state as Record<string, unknown>;
-    expect(maskedState.ip).toBe("192.xxx.xxx.110");
+    expect(maskedState.ip).toBe("10.xxx.xxx.31");
     expect(String(maskedState.token)).toContain("***");
     expect(pkg.redaction_stats.totalMasked).toBeGreaterThan(0);
   });

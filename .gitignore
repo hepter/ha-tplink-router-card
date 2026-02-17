@@ -3,3 +3,6 @@ dist/
 *.log
 .DS_Store
 fixtures/tplink_router/live-*.json
+__pycache__/
+*.pyc
+.venv/

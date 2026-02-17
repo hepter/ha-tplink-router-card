@@ -6,7 +6,7 @@
 
 A Lovelace card for Home Assistant focused on TP-Link client monitoring and quick router controls.
 
-![Card preview](card.png)
+![TP-Link Router example](docs/images/tplink_router_card.png)
 
 ⭐ Found it useful? Please star the repo to support development and help others discover it.
 
@@ -22,17 +22,64 @@ A Lovelace card for Home Assistant focused on TP-Link client monitoring and quic
 - Optional colorization for TX/RX and Up/Down speeds.
 - Up/Down hover tooltip with utilization bar, Bandwidth Load, adaptive transfer unit, and current/max Mbps.
 
+## Screenshots
+`tplink_router`:
+
+![tplink_router](docs/images/tplink_router_card.png)
+
+`tplink_deco`:
+
+![tplink_deco](docs/images/tplink_deco_card.png)
+
+`omada` / `tplink_omada`:
+
+![omada](docs/images/tplink_omada_card.png)
+
+Header variants (`hide_header` / `hide_filter_section` options):
+
+Headless layout: the filter row stays visible while the header is hidden.
+
+![headless](docs/images/tplink_router_card-headless.png)
+
+Headless + no filter layout: both header and filter row are hidden for a compact table-only card.
+
+![headless + no filter](docs/images/tplink_router_card-headless+nofilter.png)
+
 ## Compatibility
-- Primary integration: [`home-assistant-tplink-router`](https://github.com/AlexandrErohin/home-assistant-tplink-router)
-- Router model support follows the upstream integration support list.
-- In practice this typically includes TP-Link families such as Archer, Deco, TL-MR/TL-WA and supported Mercusys models from the upstream project.
-- Partial Omada action support is available when matching entities exist:
-  - Reconnect
-  - Start WLAN Optimization
+- Supported integrations:
+  - [`home-assistant-tplink-router`](https://github.com/AlexandrErohin/home-assistant-tplink-router) (`tplink_router`)
+  - [`ha-tplink-deco`](https://github.com/amosyuen/ha-tplink-deco) (`tplink_deco`)
+  - [`ha-omada`](https://github.com/zachcheatham/ha-omada) (`omada`)
+  - Home Assistant Core `tplink_omada` (`tplink_omada`)
+
+Support level summary:
+- `tplink_router`: full support
+- `tplink_deco`: high support
+- `omada`: partial support
+- `tplink_omada`: partial support
+
+Detailed matrix: `docs/integration-support.md`
+
+- `tplink_router`:
+  - Full client table mapping from router tracker attributes.
+  - Router action icons from exposed `switch.*` / `button.*` entities.
+
+- `tplink_deco`:
+  - Client/deco table mapping from `device_tracker.*` entities.
+  - Supports `connection_type` and `interface` mapping.
+  - Upload/download speed values are normalized automatically.
+  - Action icons are shown only if `switch.*` or `button.*` entities are available in the selected entry.
+
+- Omada (`omada` / `tplink_omada`):
+  - Client listing support.
+  - Partial action support when matching entities exist:
+    - Reconnect
+    - Start WLAN Optimization
 
 Notes:
 - Available actions and sensors depend on model, firmware, and integration-exposed entities.
 - If an action cannot be matched safely, it is hidden by design.
+- Integration-specific attributes are parsed with safe fallbacks. Missing fields never crash the card and are rendered as `—`.
 
 ## Installation
 
@@ -75,7 +122,7 @@ Minimal:
 type: custom:tplink-router-card
 ```
 
-Example:
+Generic example:
 ```yaml
 type: custom:tplink-router-card
 title: My Router
@@ -83,6 +130,12 @@ entry_id: <config_entry_id>
 speed_unit: MBps
 txrx_color: true
 updown_color: true
+hide_header: false
+hide_filter_section: false
+default_filters:
+  band: all
+  connection: all
+  status: all
 upload_speed_color_max: 1000
 download_speed_color_max: 100
 columns:
@@ -103,12 +156,87 @@ columns:
   - signal
 ```
 
+### Recommended column presets by integration
+
+`name` is always shown automatically.  
+For YAML users, set `columns` to show only the fields relevant to that integration.
+
+`tplink_router` (recommended)
+```yaml
+type: custom:tplink-router-card
+entry_id: <tplink_router_entry_id>
+columns:
+  - status
+  - connection
+  - band
+  - ip
+  - mac
+  - hostname
+  - packetsSent
+  - packetsReceived
+  - down
+  - up
+  - tx
+  - rx
+  - online
+  - traffic
+  - signal
+```
+
+`tplink_deco` (recommended)
+```yaml
+type: custom:tplink-router-card
+entry_id: <tplink_deco_entry_id>
+columns:
+  - status
+  - connection
+  - band
+  - ip
+  - mac
+  - hostname
+  - down
+  - up
+  - online
+  - deviceType
+  - deviceModel
+  - deviceFirmware
+  - deviceStatus
+```
+
+`omada` / `tplink_omada` (recommended)
+```yaml
+type: custom:tplink-router-card
+entry_id: <omada_entry_id>
+columns:
+  - status
+  - connection
+  - band
+  - ip
+  - mac
+  - hostname
+  - down
+  - up
+  - online
+  - traffic
+  - signal
+  - deviceType
+  - deviceModel
+  - deviceFirmware
+  - deviceStatus
+```
+
 Options:
 - `title`: Card title.
 - `entry_id`: Config entry to use. Selected from editor.
 - `speed_unit`: `MBps` (default) or `Mbps` for Up/Down columns.
 - `txrx_color`: Enable colorized TX/RX speed levels.
 - `updown_color`: Enable colorized upload/download speeds.
+- `hide_header`: Hide the header area.
+- `hide_filter_section`: Hide the filter section.
+- `default_filters`: Optional fixed default filters applied on every page load.
+  - `band`: `all | 2g | 5g | 6g`
+  - `connection`: `all | wifi | wired | iot | guest`
+  - `status`: `all | online | offline`
 - `upload_speed_color_max`: Upload color scale max in Mbps. Default `1000`.
 - `download_speed_color_max`: Download color scale max in Mbps. Default `100`.
 - `columns`: Optional column set and order.
@@ -116,20 +244,14 @@ Options:
 Rules:
 - `name` is always visible and cannot be removed.
 - Column order follows `columns` order.
+- Only columns valid for the selected integration domain are rendered.
+- If `default_filters` is set, it overrides localStorage filter restore on every reload.
+- `hide_filter_section` works well with `default_filters` for fixed filtered dashboards.
 
-Speed data model:
-- `up_speed` / `down_speed` from `tplink_router` are treated as transfer rates in `bytes/s`.
-- `speed_unit` selects how Up/Down values are displayed (`MB/s` or `Mbps`).
-- `tx_rate` / `rx_rate` are mapped as link-rate fields with separate formatting logic.
-
-Tooltip semantics (Up/Down):
-- `Bandwidth Load`: current speed as percentage of the configured color scale max.
-- `Transfer`: adaptive transfer value (`B/s`, `KB/s`, `MB/s`, `GB/s`).
-- `Mbps`: current Mbps and scale max shown as `current/max`.
 
 Editor preview:
 
-![Card editor](card-config.png)
+![Card editor](docs/images/tplink_card_config.png)
 
 ## Diagnostics Export
 When reporting a bug, attach a diagnostics dump:
@@ -145,8 +267,18 @@ Export behavior:
 - Includes size/depth protection and truncation markers for very large payloads.
 - For your security, review the file before attaching it to a public issue.
 
+## Virtual Modem Lab
+For local end-to-end testing with real integration setup flows, a virtual device lab is included:
+
+- `virtual_modems/tplink_router_be230` (for `tplink_router`)
+- `virtual_modems/tplink_deco_x50` (for `tplink_deco`)
+- `virtual_modems/omada_controller` (shared by `omada` and `tplink_omada`)
+
+See `virtual_modems/README.md` for setup and run commands.
+
 ## Troubleshooting
 - Missing entries: ensure the integration is installed and the selected `entry_id` is correct.
+- Empty table with a valid `entry_id`: check quick filters (`All / 2G / 5G / 6G`, `All / WiFi / Wired / IoT / Guest`, `All / Online / Offline`).
 - Missing metadata/tooltips: some routers/integrations do not expose full router details.
 - No action icons: action entities may be unsupported, unavailable, or intentionally filtered for safety.
 

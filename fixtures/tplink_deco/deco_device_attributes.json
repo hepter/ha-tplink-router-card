@@ -1,0 +1,28 @@
+{
+  "state": {
+    "entity_id": "device_tracker.deco_master",
+    "state": "home",
+    "attributes": {
+      "friendly_name": "Deco Master",
+      "source_type": "router",
+      "device_type": "deco",
+      "device_model": "Deco X50",
+      "sw_version": "1.0.17 Build 20260118 Rel.10220",
+      "internet_online": true,
+      "connection_type": "wired",
+      "wire_type": "wired",
+      "ip": "10.68.0.1",
+      "mac": "02-68-50-AA-10-01"
+    }
+  },
+  "speedUnit": "MBps",
+  "expected": {
+    "connection": "wired",
+    "connectionType": "wired",
+    "hostname": "Deco X50",
+    "deviceType": "Deco",
+    "deviceModel": "Deco X50",
+    "deviceFirmware": "1.0.17 Build 20260118 Rel.10220",
+    "deviceStatus": "Online"
+  }
+}

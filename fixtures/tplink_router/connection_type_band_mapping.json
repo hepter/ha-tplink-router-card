@@ -1,0 +1,28 @@
+{
+  "state": {
+    "entity_id": "device_tracker.deco_client",
+    "state": "home",
+    "attributes": {
+      "friendly_name": "Deco Client",
+      "source_type": "router",
+      "ip": "192.168.1.50",
+      "mac": "AA-BB-CC-DD-EE-FF",
+      "host_name": "deco-client",
+      "connection_type": "band2_4",
+      "up_speed": 0,
+      "down_speed": 0,
+      "tx_rate": 65000,
+      "rx_rate": 866000,
+      "online_time": 3600,
+      "traffic_usage": 0,
+      "signal": -48
+    }
+  },
+  "speedUnit": "MBps",
+  "expected": {
+    "connection": "wifi",
+    "connectionType": "wifi",
+    "band": "2G",
+    "bandType": "2g"
+  }
+}

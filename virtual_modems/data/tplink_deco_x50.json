@@ -1,0 +1,229 @@
+{
+  "decos": [
+    {
+      "mac": "02:68:50:AA:10:01",
+      "name": "Deco-X50-Master",
+      "role": "master",
+      "device_model": "Deco X50",
+      "hardware_ver": "1.3",
+      "software_ver": "1.0.17 Build 20260118 Rel.10220",
+      "master": true,
+      "online": true,
+      "ip_address": "10.68.0.1",
+      "connection_type": "wired",
+      "internet_online": true,
+      "signal_band2_4": 0,
+      "signal_band5": 0,
+      "bssid_band2_4": "02:68:50:AA:10:11",
+      "bssid_band5": "02:68:50:AA:10:12"
+    }
+  ],
+  "network": {
+    "wan": {
+      "ip_info": {
+        "mac": "02:68:50:AA:10:01",
+        "ip": "100.90.22.31",
+        "gateway": "100.90.22.1",
+        "mask": "255.255.255.0",
+        "dns1": "1.1.1.1",
+        "dns2": "8.8.8.8"
+      },
+      "dial_type": "dhcp"
+    },
+    "lan": {
+      "ip_info": {
+        "mac": "02:68:50:AA:10:01",
+        "ip": "10.68.0.1",
+        "mask": "255.255.255.0"
+      }
+    }
+  },
+  "performance": {
+    "cpu_usage": 14,
+    "mem_usage": 28
+  },
+  "wireless": {
+    "band2_4": {
+      "host": {
+        "enable": true
+      },
+      "guest": {
+        "enable": false
+      }
+    },
+    "band5_1": {
+      "host": {
+        "enable": true
+      },
+      "guest": {
+        "enable": true
+      }
+    },
+    "band6": {
+      "host": {
+        "enable": false
+      },
+      "guest": {
+        "enable": false
+      }
+    }
+  },
+  "clients": [
+    {
+      "name": "dm0tcGhvbmUtbWFpbi1kNHA=",
+      "mac": "0A-DE-50-00-00-04",
+      "ip": "10.68.0.31",
+      "online": true,
+      "wire_type": "wireless",
+      "connection_type": "band5",
+      "interface": "main",
+      "up_kilobytes_per_s": 820,
+      "down_kilobytes_per_s": 13240,
+      "deco_mac": "02:68:50:AA:10:01"
+    },
+    {
+      "name": "dm0tZ3Vlc3QtcGhvbmUtZDRw",
+      "mac": "0A-DE-50-00-00-0C",
+      "ip": "10.68.0.41",
+      "online": true,
+      "wire_type": "wireless",
+      "connection_type": "band5",
+      "interface": "guest",
+      "up_kilobytes_per_s": 0,
+      "down_kilobytes_per_s": 0,
+      "deco_mac": "02:68:50:AA:10:01"
+    },
+    {
+      "name": "dm0td29ya3N0YXRpb24tbGFuLWQ0cA==",
+      "mac": "0A-DE-50-00-00-01",
+      "ip": "10.68.0.21",
+      "online": true,
+      "wire_type": "wired",
+      "connection_type": "wired",
+      "interface": "main",
+      "up_kilobytes_per_s": 0,
+      "down_kilobytes_per_s": 0,
+      "deco_mac": "02:68:50:AA:10:01"
+    },
+    {
+      "name": "dm0tdGFibGV0LTZnLWQ0cA==",
+      "mac": "0A-DE-50-00-00-05",
+      "ip": "10.68.0.32",
+      "online": true,
+      "wire_type": "wireless",
+      "connection_type": "band6",
+      "interface": "main",
+      "up_kilobytes_per_s": 620,
+      "down_kilobytes_per_s": 8640,
+      "deco_mac": "02:68:50:AA:10:01"
+    },
+    {
+      "name": "dm0tdHYtbG91bmdlLWQ0cA==",
+      "mac": "0A-DE-50-00-00-06",
+      "ip": "10.68.0.33",
+      "online": true,
+      "wire_type": "wireless",
+      "connection_type": "band5",
+      "interface": "main",
+      "up_kilobytes_per_s": 540,
+      "down_kilobytes_per_s": 24800,
+      "deco_mac": "02:68:50:AA:10:01"
+    },
+    {
+      "name": "dm0tY2FtLWZyb250ZG9vci1kNHA=",
+      "mac": "0A-DE-50-00-00-07",
+      "ip": "10.68.0.34",
+      "online": true,
+      "wire_type": "wireless",
+      "connection_type": "band2_4",
+      "interface": "iot",
+      "up_kilobytes_per_s": 90,
+      "down_kilobytes_per_s": 110,
+      "deco_mac": "02:68:50:AA:10:01"
+    },
+    {
+      "name": "dm0taW90LWxvY2stZDRw",
+      "mac": "0A-DE-50-00-00-08",
+      "ip": "10.68.0.35",
+      "online": true,
+      "wire_type": "wireless",
+      "connection_type": "band2_4",
+      "interface": "iot",
+      "up_kilobytes_per_s": 8,
+      "down_kilobytes_per_s": 12,
+      "deco_mac": "02:68:50:AA:10:01"
+    },
+    {
+      "name": "dm0tcHJpbnRlci1sYW4tZDRw",
+      "mac": "0A-DE-50-00-00-02",
+      "ip": "10.68.0.22",
+      "online": true,
+      "wire_type": "wired",
+      "connection_type": "wired",
+      "interface": "main",
+      "up_kilobytes_per_s": 12,
+      "down_kilobytes_per_s": 35,
+      "deco_mac": "02:68:50:AA:10:01"
+    },
+    {
+      "name": "dm0tbmFzLWxhbi1kNHA=",
+      "mac": "0A-DE-50-00-00-03",
+      "ip": "10.68.0.23",
+      "online": true,
+      "wire_type": "wired",
+      "connection_type": "wired",
+      "interface": "main",
+      "up_kilobytes_per_s": 7600,
+      "down_kilobytes_per_s": 9800,
+      "deco_mac": "02:68:50:AA:10:01"
+    },
+    {
+      "name": "dm0tbGFwdG9wLWd1ZXN0LWQ0cA==",
+      "mac": "0A-DE-50-00-00-0D",
+      "ip": "10.68.0.42",
+      "online": true,
+      "wire_type": "wireless",
+      "connection_type": "band5",
+      "interface": "guest",
+      "up_kilobytes_per_s": 900,
+      "down_kilobytes_per_s": 4200,
+      "deco_mac": "02:68:50:AA:10:01"
+    },
+    {
+      "name": "dm0tY29uc29sZS1kNHA=",
+      "mac": "0A-DE-50-00-00-09",
+      "ip": "10.68.0.36",
+      "online": true,
+      "wire_type": "wireless",
+      "connection_type": "band5",
+      "interface": "main",
+      "up_kilobytes_per_s": 1600,
+      "down_kilobytes_per_s": 5400,
+      "deco_mac": "02:68:50:AA:10:01"
+    },
+    {
+      "name": "dm0tc3BlYWtlci1taW5pLWQ0cA==",
+      "mac": "0A-DE-50-00-00-0A",
+      "ip": "10.68.0.37",
+      "online": false,
+      "wire_type": "wireless",
+      "connection_type": "band2_4",
+      "interface": "iot",
+      "up_kilobytes_per_s": 0,
+      "down_kilobytes_per_s": 0,
+      "deco_mac": "02:68:50:AA:10:01"
+    },
+    {
+      "name": "dm0tcGhvbmUtb2xkLWQ0cA==",
+      "mac": "0A-DE-50-00-00-0B",
+      "ip": "10.68.0.38",
+      "online": false,
+      "wire_type": "wireless",
+      "connection_type": "band5",
+      "interface": "main",
+      "up_kilobytes_per_s": 0,
+      "down_kilobytes_per_s": 0,
+      "deco_mac": "02:68:50:AA:10:01"
+    }
+  ]
+}

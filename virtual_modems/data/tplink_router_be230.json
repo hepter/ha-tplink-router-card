@@ -1,0 +1,428 @@
+{
+  "router": {
+    "model": "Archer BE230",
+    "hardware_version": "Archer BE230 v1.0",
+    "firmware_version": "1.2.5 Build 20260108 rel.68570(4555)",
+    "lan_ipv4_ipaddr": "10.77.50.1",
+    "wan_ipv4_ipaddr": "100.90.20.10",
+    "wan_ipv4_gateway": "100.90.20.1",
+    "lan_macaddr": "02:77:50:AA:00:01",
+    "wan_macaddr": "02:77:50:AA:00:02"
+  },
+  "status": {
+    "mem_usage": 0.33,
+    "cpu_usage": 0.21,
+    "conn_type": "dhcp",
+    "wireless_2g_enable": "on",
+    "wireless_5g_enable": "on",
+    "wireless_6g_enable": "on",
+    "guest_2g_enable": "off",
+    "guest_5g_enable": "off",
+    "guest_6g_enable": "off",
+    "iot_2g_enable": "on",
+    "iot_5g_enable": "off",
+    "iot_6g_enable": "off"
+  },
+  "clients": {
+    "wired": [
+      {
+        "macaddr": "0A-BE-23-00-00-01",
+        "ipaddr": "10.77.50.21",
+        "hostname": "vm-workstation-lan-r7k",
+        "wire_type": "wired"
+      },
+      {
+        "macaddr": "0A-BE-23-00-00-02",
+        "ipaddr": "10.77.50.22",
+        "hostname": "vm-nas-lan-r7k",
+        "wire_type": "wired"
+      },
+      {
+        "macaddr": "0A-BE-23-00-00-03",
+        "ipaddr": "10.77.50.23",
+        "hostname": "vm-printer-lan-r7k",
+        "wire_type": "wired"
+      },
+      {
+        "macaddr": "0A-BE-23-00-00-04",
+        "ipaddr": "10.77.50.24",
+        "hostname": "vm-tv-lan-r7k",
+        "wire_type": "wired"
+      }
+    ],
+    "host": [
+      {
+        "macaddr": "0A-BE-23-00-00-05",
+        "ipaddr": "10.77.50.31",
+        "hostname": "vm-phone-main-r7k",
+        "wire_type": "5g"
+      },
+      {
+        "macaddr": "0A-BE-23-00-00-06",
+        "ipaddr": "10.77.50.32",
+        "hostname": "vm-laptop-main-r7k",
+        "wire_type": "5g"
+      },
+      {
+        "macaddr": "0A-BE-23-00-00-07",
+        "ipaddr": "10.77.50.33",
+        "hostname": "vm-tablet-6g-r7k",
+        "wire_type": "6g"
+      },
+      {
+        "macaddr": "0A-BE-23-00-00-08",
+        "ipaddr": "10.77.50.34",
+        "hostname": "vm-watch-2g-r7k",
+        "wire_type": "2.4g"
+      },
+      {
+        "macaddr": "0A-BE-23-00-00-09",
+        "ipaddr": "10.77.50.35",
+        "hostname": "vm-console-5g-r7k",
+        "wire_type": "5g"
+      }
+    ],
+    "guest": [
+      {
+        "macaddr": "0A-BE-23-00-00-0A",
+        "ipaddr": "10.77.50.41",
+        "hostname": "vm-guest-phone-r7k",
+        "wire_type": "5g"
+      },
+      {
+        "macaddr": "0A-BE-23-00-00-0B",
+        "ipaddr": "10.77.50.42",
+        "hostname": "vm-guest-laptop-r7k",
+        "wire_type": "5g"
+      },
+      {
+        "macaddr": "0A-BE-23-00-00-0C",
+        "ipaddr": "10.77.50.43",
+        "hostname": "vm-guest-tablet-r7k",
+        "wire_type": "2.4g"
+      }
+    ],
+    "smart_network": [
+      {
+        "mac": "0A-BE-23-00-00-01",
+        "deviceName": "vm-workstation-lan-r7k",
+        "ip": "10.77.50.21",
+        "deviceTag": "wired",
+        "isGuest": false,
+        "downloadSpeed": 88000000,
+        "uploadSpeed": 10500000,
+        "txRate": 1000000,
+        "rxRate": 1000000,
+        "onlineTime": 435950,
+        "trafficUsage": 1051452109120,
+        "signal": null
+      },
+      {
+        "mac": "0A-BE-23-00-00-02",
+        "deviceName": "vm-nas-lan-r7k",
+        "ip": "10.77.50.22",
+        "deviceTag": "wired",
+        "isGuest": false,
+        "downloadSpeed": 94000000,
+        "uploadSpeed": 11800000,
+        "txRate": 1000000,
+        "rxRate": 1000000,
+        "onlineTime": 433210,
+        "trafficUsage": 2488017426432,
+        "signal": null
+      },
+      {
+        "mac": "0A-BE-23-00-00-03",
+        "deviceName": "vm-printer-lan-r7k",
+        "ip": "10.77.50.23",
+        "deviceTag": "wired",
+        "isGuest": false,
+        "downloadSpeed": 16000,
+        "uploadSpeed": 120000,
+        "txRate": 100000,
+        "rxRate": 100000,
+        "onlineTime": 88910,
+        "trafficUsage": 1244044288,
+        "signal": null
+      },
+      {
+        "mac": "0A-BE-23-00-00-04",
+        "deviceName": "vm-tv-lan-r7k",
+        "ip": "10.77.50.24",
+        "deviceTag": "wired",
+        "isGuest": false,
+        "downloadSpeed": 12000000,
+        "uploadSpeed": 1800000,
+        "txRate": 1000000,
+        "rxRate": 1000000,
+        "onlineTime": 6460,
+        "trafficUsage": 4410436608,
+        "signal": null,
+        "flap": {
+          "period_seconds": 120,
+          "on_ratio": 0.5,
+          "offset_seconds": 0
+        }
+      },
+      {
+        "mac": "0A-BE-23-00-00-05",
+        "deviceName": "vm-phone-main-r7k",
+        "ip": "10.77.50.31",
+        "deviceTag": "host_5g",
+        "isGuest": false,
+        "downloadSpeed": 1850000,
+        "uploadSpeed": 260000,
+        "txRate": 866000,
+        "rxRate": 1300000,
+        "onlineTime": 92540,
+        "trafficUsage": 9604302848,
+        "signal": -57
+      },
+      {
+        "mac": "0A-BE-23-00-00-06",
+        "deviceName": "vm-laptop-main-r7k",
+        "ip": "10.77.50.32",
+        "deviceTag": "host_5g",
+        "isGuest": false,
+        "downloadSpeed": 23500000,
+        "uploadSpeed": 4400000,
+        "txRate": 1440000,
+        "rxRate": 2400000,
+        "onlineTime": 186650,
+        "trafficUsage": 88566611968,
+        "signal": -50
+      },
+      {
+        "mac": "0A-BE-23-00-00-07",
+        "deviceName": "vm-tablet-6g-r7k",
+        "ip": "10.77.50.33",
+        "deviceTag": "host_6g",
+        "isGuest": false,
+        "downloadSpeed": 34200000,
+        "uploadSpeed": 5900000,
+        "txRate": 2400000,
+        "rxRate": 5200000,
+        "onlineTime": 116520,
+        "trafficUsage": 153970212864,
+        "signal": -48
+      },
+      {
+        "mac": "0A-BE-23-00-00-08",
+        "deviceName": "vm-watch-2g-r7k",
+        "ip": "10.77.50.34",
+        "deviceTag": "host_2g",
+        "isGuest": false,
+        "downloadSpeed": 28000,
+        "uploadSpeed": 24000,
+        "txRate": 72000,
+        "rxRate": 65000,
+        "onlineTime": 285600,
+        "trafficUsage": 1248349440,
+        "signal": -66
+      },
+      {
+        "mac": "0A-BE-23-00-00-09",
+        "deviceName": "vm-console-5g-r7k",
+        "ip": "10.77.50.35",
+        "deviceTag": "host_5g",
+        "isGuest": false,
+        "downloadSpeed": 7100000,
+        "uploadSpeed": 850000,
+        "txRate": 780000,
+        "rxRate": 1650000,
+        "onlineTime": 88500,
+        "trafficUsage": 35148488704,
+        "signal": -59
+      },
+      {
+        "mac": "0A-BE-23-00-00-0A",
+        "deviceName": "vm-guest-phone-r7k",
+        "ip": "10.77.50.41",
+        "deviceTag": "guest_5g",
+        "isGuest": true,
+        "downloadSpeed": 2500000,
+        "uploadSpeed": 110000,
+        "txRate": 650000,
+        "rxRate": 866000,
+        "onlineTime": 12840,
+        "trafficUsage": 11431884800,
+        "signal": -68
+      },
+      {
+        "mac": "0A-BE-23-00-00-0B",
+        "deviceName": "vm-guest-laptop-r7k",
+        "ip": "10.77.50.42",
+        "deviceTag": "guest_5g",
+        "isGuest": true,
+        "downloadSpeed": 5600000,
+        "uploadSpeed": 1220000,
+        "txRate": 1000000,
+        "rxRate": 1200000,
+        "onlineTime": 10740,
+        "trafficUsage": 27355418624,
+        "signal": -71,
+        "flap": {
+          "period_seconds": 120,
+          "on_ratio": 0.5,
+          "offset_seconds": 30
+        }
+      },
+      {
+        "mac": "0A-BE-23-00-00-0C",
+        "deviceName": "vm-guest-tablet-r7k",
+        "ip": "10.77.50.43",
+        "deviceTag": "guest_2g",
+        "isGuest": true,
+        "downloadSpeed": 120000,
+        "uploadSpeed": 68000,
+        "txRate": 144000,
+        "rxRate": 72000,
+        "onlineTime": 5120,
+        "trafficUsage": 1337122816,
+        "signal": -73
+      },
+      {
+        "mac": "0A-BE-23-00-00-0D",
+        "deviceName": "vm-cam-iot-1-r7k",
+        "ip": "10.77.50.51",
+        "deviceTag": "iot_2g",
+        "isGuest": false,
+        "downloadSpeed": 2100000,
+        "uploadSpeed": 410000,
+        "txRate": 72000,
+        "rxRate": 65000,
+        "onlineTime": 311840,
+        "trafficUsage": 18887290880,
+        "signal": -52
+      },
+      {
+        "mac": "0A-BE-23-00-00-0E",
+        "deviceName": "vm-cam-iot-2-r7k",
+        "ip": "10.77.50.52",
+        "deviceTag": "iot_2g",
+        "isGuest": false,
+        "downloadSpeed": 0,
+        "uploadSpeed": 0,
+        "txRate": 65000,
+        "rxRate": 65000,
+        "onlineTime": 40120,
+        "trafficUsage": 8455065600,
+        "signal": -61,
+        "flap": {
+          "period_seconds": 120,
+          "on_ratio": 0.5,
+          "offset_seconds": 60
+        }
+      },
+      {
+        "mac": "0A-BE-23-00-00-0F",
+        "deviceName": "vm-lock-iot-r7k",
+        "ip": "10.77.50.53",
+        "deviceTag": "iot_2g",
+        "isGuest": false,
+        "downloadSpeed": 18000,
+        "uploadSpeed": 15000,
+        "txRate": 54000,
+        "rxRate": 72000,
+        "onlineTime": 189240,
+        "trafficUsage": 524288000,
+        "signal": -67
+      },
+      {
+        "mac": "0A-BE-23-00-00-10",
+        "deviceName": "vm-sensor-iot-3-r7k",
+        "ip": "10.77.50.54",
+        "deviceTag": "iot_2g",
+        "isGuest": false,
+        "downloadSpeed": 14000,
+        "uploadSpeed": 12000,
+        "txRate": 54000,
+        "rxRate": 65000,
+        "onlineTime": 95400,
+        "trafficUsage": 348127232,
+        "signal": -64
+      },
+      {
+        "mac": "0A-BE-23-00-00-11",
+        "deviceName": "vm-sensor-iot-4-r7k",
+        "ip": "10.77.50.55",
+        "deviceTag": "iot_2g",
+        "isGuest": false,
+        "downloadSpeed": 10000,
+        "uploadSpeed": 11000,
+        "txRate": 54000,
+        "rxRate": 65000,
+        "onlineTime": 68420,
+        "trafficUsage": 262144000,
+        "signal": -69
+      }
+    ],
+    "wireless_stats": [
+      {
+        "mac": "0A-BE-23-00-00-05",
+        "txpkts": 5259012,
+        "rxpkts": 9271804
+      },
+      {
+        "mac": "0A-BE-23-00-00-06",
+        "txpkts": 6241120,
+        "rxpkts": 13019221
+      },
+      {
+        "mac": "0A-BE-23-00-00-07",
+        "txpkts": 5418221,
+        "rxpkts": 9322602
+      },
+      {
+        "mac": "0A-BE-23-00-00-08",
+        "txpkts": 881220,
+        "rxpkts": 1068290
+      },
+      {
+        "mac": "0A-BE-23-00-00-09",
+        "txpkts": 3011122,
+        "rxpkts": 6274455
+      },
+      {
+        "mac": "0A-BE-23-00-00-0A",
+        "txpkts": 1511221,
+        "rxpkts": 2687002
+      },
+      {
+        "mac": "0A-BE-23-00-00-0B",
+        "txpkts": 1847720,
+        "rxpkts": 3381933
+      },
+      {
+        "mac": "0A-BE-23-00-00-0C",
+        "txpkts": 272810,
+        "rxpkts": 430992
+      },
+      {
+        "mac": "0A-BE-23-00-00-0D",
+        "txpkts": 1901112,
+        "rxpkts": 5120102
+      },
+      {
+        "mac": "0A-BE-23-00-00-0E",
+        "txpkts": 890220,
+        "rxpkts": 1849012
+      },
+      {
+        "mac": "0A-BE-23-00-00-0F",
+        "txpkts": 612240,
+        "rxpkts": 933100
+      },
+      {
+        "mac": "0A-BE-23-00-00-10",
+        "txpkts": 331120,
+        "rxpkts": 541880
+      },
+      {
+        "mac": "0A-BE-23-00-00-11",
+        "txpkts": 282940,
+        "rxpkts": 499220
+      }
+    ]
+  }
+}

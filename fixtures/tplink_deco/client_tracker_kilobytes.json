@@ -1,0 +1,29 @@
+{
+  "state": {
+    "entity_id": "device_tracker.guest_tv",
+    "state": "home",
+    "attributes": {
+      "friendly_name": "Guest TV",
+      "source_type": "router",
+      "device_type": "client",
+      "ip": "192.168.1.180",
+      "mac": "AA-BB-CC-DD-EE-FF",
+      "interface": "iot",
+      "connection_type": "band5",
+      "up_kilobytes_per_s": 0.125,
+      "down_kilobytes_per_s": 2.75,
+      "online_time": 120.0,
+      "traffic_usage": 0,
+      "signal": -55
+    }
+  },
+  "speedUnit": "MBps",
+  "expected": {
+    "connection": "iot",
+    "connectionType": "iot",
+    "band": "5G",
+    "bandType": "5g",
+    "upSpeed": "125 B/s",
+    "downSpeed": "2.75 KB/s"
+  }
+}

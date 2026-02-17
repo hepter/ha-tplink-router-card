@@ -24,10 +24,18 @@ export interface TplinkRouterCardConfig {
   speed_unit?: "MBps" | "Mbps";
   txrx_color?: boolean;
   updown_color?: boolean;
+  hide_header?: boolean;
+  hide_filter_section?: boolean;
+  default_filters?: {
+    band?: "all" | "2g" | "5g" | "6g";
+    connection?: "all" | "wifi" | "wired" | "iot" | "guest";
+    status?: "all" | "online" | "offline";
+  };
+  default_filter_band?: "all" | "2g" | "5g" | "6g" | "" | "__saved__";
+  default_filter_connection?: "all" | "wifi" | "wired" | "iot" | "guest" | "" | "__saved__";
+  default_filter_status?: "all" | "online" | "offline" | "" | "__saved__";
   upload_speed_color_max?: number;
   download_speed_color_max?: number;
-  // Deprecated: kept for backward compatibility with older configs.
-  speed_color_max?: number;
   columns?: string[];
 }
 

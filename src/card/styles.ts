@@ -17,6 +17,10 @@ export const cardStyles = css`
     border-bottom: 1px solid var(--divider-color);
   }
 
+  .header.hidden {
+    display: none;
+  }
+
   .title {
     display: flex;
     align-items: flex-start;
@@ -164,6 +168,18 @@ export const cardStyles = css`
     justify-content: flex-end;
   }
 
+  .action-device-select {
+    min-width: 140px;
+    max-width: 220px;
+    height: 28px;
+    border-radius: 8px;
+    border: 1px solid var(--divider-color);
+    background: var(--card-background-color);
+    color: var(--primary-text-color);
+    padding: 0 8px;
+    font-size: 12px;
+  }
+
   .action-group {
     display: inline-flex;
     align-items: center;
@@ -276,6 +292,10 @@ export const cardStyles = css`
     border-bottom: 1px solid var(--divider-color);
     align-items: center;
     font-size: 12px;
+  }
+
+  .filter-row.hidden {
+    display: none;
   }
 
   .filter-group {
@@ -432,6 +452,12 @@ export const cardStyles = css`
     color: #f59e0b;
     background: rgba(245, 158, 11, 0.18);
     border-color: rgba(245, 158, 11, 0.35);
+  }
+
+  .band-pill.band-wired {
+    color: #8b5cf6;
+    background: rgba(139, 92, 246, 0.18);
+    border-color: rgba(139, 92, 246, 0.35);
   }
 
   .band-pill.band-unknown {

@@ -16,8 +16,20 @@ Thanks for helping improve the TP-Link Router Lovelace card.
 - Run tests: `npm run test`
 - Full local check: `npm run check`
 
+## Virtual integration lab
+- Virtual modem/controller profiles are under `virtual_modems/`.
+- Use these to validate real integration onboarding flows locally:
+  - `python -m virtual_modems.run tplink_router_be230`
+  - `python -m virtual_modems.run tplink_deco_x50`
+  - `python -m virtual_modems.run omada_controller` (shared for `omada` and `tplink_omada`)
+- Full details: `virtual_modems/README.md`.
+
 ## Fixture contract tests
 - Contract fixtures live under `fixtures/<integration>/`.
+- Current integration fixture folders:
+  - `fixtures/tplink_router/`
+  - `fixtures/tplink_deco/`
+  - `fixtures/omada/`
 - Use behavior-focused fixture names.
   - Example: `entry_scoped_tracker_selection.json`, `router_device_preference.json`, `client_activity_mapping.json`
 - Contract tests live in `src/*-adapter.contract.test.ts`.

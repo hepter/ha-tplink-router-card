@@ -14,6 +14,7 @@ Behavior-based contract fixtures used by adapter tests.
 
 ## Structure
 - `fixtures/tplink_router/`: payloads for `tplink_router` adapter contracts.
+- `fixtures/tplink_deco/`: payloads for `tplink_deco` adapter contracts.
 - `fixtures/omada/`: payloads for Omada adapter contracts.
 
 ## TP-Link Router minimum shape
@@ -51,8 +52,34 @@ Behavior-based contract fixtures used by adapter tests.
 }
 ```
 
+## TP-Link Deco minimum shape
+
+```json
+{
+  "state": {
+    "entity_id": "device_tracker.client_name",
+    "state": "home",
+    "attributes": {
+      "source_type": "router",
+      "device_type": "client",
+      "ip": "192.168.68.10",
+      "mac": "AA-BB-CC-DD-EE-FF",
+      "interface": "main|guest|iot",
+      "connection_type": "wired|band2_4|band5",
+      "up_kilobytes_per_s": 0.125,
+      "down_kilobytes_per_s": 2.75
+    }
+  }
+}
+```
+
 ## Fixture quality rules
 - Keep payloads minimal and deterministic.
 - Prefer one scenario per fixture.
 - Redact sensitive fields before sharing.
 - Use diagnostics export from the card, then trim to scenario-specific data.
+
+## Virtual lab source data
+- Virtual integration mocks live in `virtual_modems/`.
+- Their seed payloads are in `virtual_modems/data/`.
+- For new adapter fixtures, prefer deriving minimal test cases from those seed payloads plus real diagnostics exports.
