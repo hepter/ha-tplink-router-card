@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import copy
 import json
+import random
 import secrets
 import time
 import re
@@ -29,6 +30,7 @@ class TplinkRouterBe230Mock:
         self.stok = "be230-stok"
         self._known_stoks: set[str] = {self.stok}
         self.sysauth = secrets.token_hex(16)
+        self._rand = random.Random()
 
     def make_success(self, data: Any) -> JSONResponse:
         return JSONResponse({"success": True, "data": data})
@@ -57,6 +59,7 @@ class TplinkRouterBe230Mock:
                 continue
             cloned = copy.deepcopy(entry)
             cloned.pop("flap", None)
+            self._randomize_runtime_client(cloned)
             items.append(cloned)
         return items
 
@@ -77,14 +80,57 @@ class TplinkRouterBe230Mock:
 
     def _runtime_wireless_stats(self, online_macs: set[str]) -> list[dict[str, Any]]:
         if not online_macs:
-            return [copy.deepcopy(item) for item in self.fixture["clients"]["wireless_stats"]]
+            return [self._randomize_wireless_stats(copy.deepcopy(item)) for item in self.fixture["clients"]["wireless_stats"]]
 
         result: list[dict[str, Any]] = []
         for item in self.fixture["clients"]["wireless_stats"]:
             mac = self._normalize_mac(str(item.get("mac", "")))
             if mac in online_macs:
-                result.append(copy.deepcopy(item))
+                result.append(self._randomize_wireless_stats(copy.deepcopy(item)))
         return result
+
+    def _jitter(self, value: int | float, spread: float, floor: int = 0) -> int:
+        base = float(value if value is not None else 0)
+        if base <= 0:
+            return floor
+        ratio = self._rand.uniform(max(0.0, 1 - spread), 1 + spread)
+        return max(floor, int(base * ratio))
+
+    def _randomize_runtime_client(self, item: dict[str, Any]) -> None:
+        # Keep values realistic for a ~1Gbps environment while still varying per request.
+        tag = str(item.get("deviceTag", "")).lower()
+        if tag == "wired":
+            down_cap = self._rand.randint(45_000_000, 125_000_000)
+            up_cap = self._rand.randint(20_000_000, 95_000_000)
+            tx_cap = self._rand.randint(900_000, 1_050_000)
+            rx_cap = self._rand.randint(900_000, 1_050_000)
+        else:
+            down_cap = self._rand.randint(400_000, 95_000_000)
+            up_cap = self._rand.randint(150_000, 65_000_000)
+            tx_cap = self._rand.randint(72_000, 2_401_000)
+            rx_cap = self._rand.randint(72_000, 2_401_000)
+
+        item["downloadSpeed"] = min(down_cap, self._jitter(int(item.get("downloadSpeed", down_cap)), 0.42))
+        item["uploadSpeed"] = min(up_cap, self._jitter(int(item.get("uploadSpeed", up_cap)), 0.42))
+        item["txRate"] = min(tx_cap, self._jitter(int(item.get("txRate", tx_cap)), 0.35, floor=1_000))
+        item["rxRate"] = min(rx_cap, self._jitter(int(item.get("rxRate", rx_cap)), 0.35, floor=1_000))
+
+        online_time = int(item.get("onlineTime") or 0)
+        item["onlineTime"] = max(1, online_time + self._rand.randint(2, 35))
+        traffic_usage = int(item.get("trafficUsage") or 0)
+        burst = int((item["downloadSpeed"] + item["uploadSpeed"]) * self._rand.uniform(0.2, 0.9))
+        item["trafficUsage"] = max(0, traffic_usage + burst)
+
+        if item.get("signal") is not None:
+            signal = int(item.get("signal") or -60)
+            item["signal"] = max(-92, min(-35, signal + self._rand.randint(-2, 2)))
+
+    def _randomize_wireless_stats(self, item: dict[str, Any]) -> dict[str, Any]:
+        txpkts = int(item.get("txpkts") or 0)
+        rxpkts = int(item.get("rxpkts") or 0)
+        item["txpkts"] = txpkts + self._rand.randint(20, 5000)
+        item["rxpkts"] = rxpkts + self._rand.randint(20, 6000)
+        return item
 
     def handle_keys(self) -> JSONResponse:
         # "data" key intentionally used so TplinkRouterV1_11 is selected by provider.
@@ -151,10 +197,12 @@ class TplinkRouterBe230Mock:
         return self.make_success(payload)
 
     def handle_status_perf(self) -> JSONResponse:
+        cpu_base = int(self.fixture["status"]["cpu_usage"])
+        mem_base = int(self.fixture["status"]["mem_usage"])
         return self.make_success(
             {
-                "cpu_usage": self.fixture["status"]["cpu_usage"],
-                "mem_usage": self.fixture["status"]["mem_usage"],
+                "cpu_usage": max(2, min(95, self._jitter(cpu_base, 0.45, floor=2))),
+                "mem_usage": max(5, min(95, self._jitter(mem_base, 0.35, floor=5))),
             }
         )
 

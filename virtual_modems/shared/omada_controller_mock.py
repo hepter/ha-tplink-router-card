@@ -3,6 +3,7 @@ from __future__ import annotations
 import copy
 import json
 import os
+import random
 import secrets
 import time
 from pathlib import Path
@@ -50,6 +51,46 @@ class OmadaControllerMock:
         self.port_profiles = copy.deepcopy(self.fixture.get("port_profiles", []))
 
         self.tokens: set[str] = set()
+        self._rand = random.Random()
+
+    def _controller_aliases(self) -> set[str]:
+        controller_id = str(self.controller.get("id", "")).strip()
+        aliases = {
+            controller_id,
+            "oc-virtual-001",
+            "oc-virtual-controller",
+            "oc-default-001",
+        }
+        return {alias for alias in aliases if alias}
+
+    def _matches_controller(self, controller_id: str) -> bool:
+        return controller_id in self._controller_aliases()
+
+    def _site_aliases(self) -> set[str]:
+        site_id = str(self.controller.get("site_id", "")).strip()
+        site_name = str(self.controller.get("site_name", "")).strip()
+        aliases = {site_id, site_name, "Default", "default", "site-main"}
+        return {alias for alias in aliases if alias}
+
+    def _site_options(self) -> list[dict[str, str]]:
+        # Keep compatibility with both integrations:
+        # - ha-omada uses a free text site name field (often "Default")
+        # - tplink_omada uses site IDs from this response
+        site_id = str(self.controller.get("site_id", "")).strip()
+        site_name = str(self.controller.get("site_name", "")).strip() or "Default"
+        options = [
+            {"name": site_name, "key": site_id},
+            {"name": "Default", "key": site_id},
+        ]
+        deduped: list[dict[str, str]] = []
+        seen: set[tuple[str, str]] = set()
+        for item in options:
+            token = (item["name"], item["key"])
+            if token in seen:
+                continue
+            seen.add(token)
+            deduped.append(item)
+        return deduped
 
     def _find_device(self, mac: str) -> dict[str, Any] | None:
         norm = _normalize_mac(mac)
@@ -161,9 +202,9 @@ class OmadaControllerMock:
         return JSONResponse({"errorCode": -30104, "msg": msg}, status_code=404)
 
     def _require_controller_site(self, controller_id: str, site: str) -> JSONResponse | None:
-        if controller_id != self.controller["id"]:
+        if not self._matches_controller(controller_id):
             return self._not_found("controller not found")
-        if site != self.controller["site_id"]:
+        if site not in self._site_aliases():
             return self._not_found("site not found")
         return None
 
@@ -201,6 +242,7 @@ class OmadaControllerMock:
         for item in self.clients:
             current = copy.deepcopy(item)
             current["active"] = self._is_client_active(item)
+            self._randomize_client_metrics(current)
             if current["active"]:
                 current["lastSeen"] = now_ms
             runtime_clients.append(current)
@@ -218,6 +260,7 @@ class OmadaControllerMock:
         for item in self.known_clients:
             current = copy.deepcopy(item)
             norm_mac = _normalize_mac(str(current.get("mac", "")))
+            self._randomize_known_client_metrics(current)
             if norm_mac in active_by_mac:
                 if active_by_mac[norm_mac]:
                     current["lastSeen"] = now_ms
@@ -226,6 +269,60 @@ class OmadaControllerMock:
                     current["lastSeen"] = now_ms - 15 * 60 * 1000
             known_items.append(current)
         return known_items
+
+    def _randomize_client_metrics(self, client: dict[str, Any]) -> None:
+        wireless = bool(client.get("wireless", False))
+        active = bool(client.get("active", False))
+
+        if wireless:
+            rx_rate = self._rand.randint(65, 2401)
+            tx_rate = self._rand.randint(65, 1801)
+            signal = self._rand.randint(2, 5) if active else self._rand.randint(1, 3)
+            rssi = self._rand.randint(-82, -36) if active else self._rand.randint(-94, -78)
+            snr = self._rand.randint(14, 44) if active else self._rand.randint(3, 14)
+        else:
+            rx_rate = self._rand.randint(940, 1000)
+            tx_rate = self._rand.randint(940, 1000)
+            signal = None
+            rssi = None
+            snr = None
+
+        traffic_down = float(client.get("trafficDown") or 0.0)
+        traffic_up = float(client.get("trafficUp") or 0.0)
+        duration = int(client.get("uptime") or 0)
+        packet_down = int(client.get("downPacket") or 0)
+        packet_up = int(client.get("upPacket") or 0)
+
+        if active:
+            traffic_down += self._rand.uniform(0.04, 9.8)
+            traffic_up += self._rand.uniform(0.02, 6.2)
+            duration += self._rand.randint(1, 20)
+            packet_down += self._rand.randint(10, 900)
+            packet_up += self._rand.randint(10, 700)
+
+        client["rxRate"] = rx_rate
+        client["txRate"] = tx_rate
+        client["signalLevel"] = signal
+        client["rssi"] = rssi
+        client["snr"] = snr
+        client["trafficDown"] = round(max(0.0, traffic_down), 3)
+        client["trafficUp"] = round(max(0.0, traffic_up), 3)
+        client["uptime"] = max(0, duration)
+        client["downPacket"] = max(0, packet_down)
+        client["upPacket"] = max(0, packet_up)
+        client["activity"] = bool(active and self._rand.random() > 0.08)
+        client["powerSave"] = bool(not active or self._rand.random() > 0.62)
+
+    def _randomize_known_client_metrics(self, client: dict[str, Any]) -> None:
+        download = float(client.get("download") or 0.0)
+        upload = float(client.get("upload") or 0.0)
+        duration = int(client.get("duration") or 0)
+        download += self._rand.uniform(0.0, 3.2)
+        upload += self._rand.uniform(0.0, 2.4)
+        duration += self._rand.randint(0, 14)
+        client["download"] = round(max(0.0, download), 3)
+        client["upload"] = round(max(0.0, upload), 3)
+        client["duration"] = max(0, duration)
 
     def _match_device(self, mac: str) -> dict[str, Any]:
         norm = _normalize_mac(mac)
@@ -306,7 +403,7 @@ class OmadaControllerMock:
 
         @app.post("/{controller_id}/api/v2/login")
         async def login(controller_id: str, request: Request):
-            if controller_id != self.controller["id"]:
+            if not self._matches_controller(controller_id):
                 return self._not_found("controller not found")
             payload = await request.json()
             if payload.get("username") != self.username or payload.get("password") != self.password:
@@ -319,36 +416,31 @@ class OmadaControllerMock:
 
         @app.get("/{controller_id}/api/v2/loginStatus")
         async def login_status(controller_id: str):
-            if controller_id != self.controller["id"]:
+            if not self._matches_controller(controller_id):
                 return self._not_found("controller not found")
             return self._ok({"login": True})
 
         @app.get("/{controller_id}/api/v2/users/current")
         async def users_current(controller_id: str):
-            if controller_id != self.controller["id"]:
+            if not self._matches_controller(controller_id):
                 return self._not_found("controller not found")
             return self._ok(
                 {
                     "privilege": {
-                        "sites": [
-                            {
-                                "name": self.controller["site_name"],
-                                "key": self.controller["site_id"],
-                            }
-                        ]
+                        "sites": self._site_options()
                     }
                 }
             )
 
         @app.get("/{controller_id}/api/v2/maintenance/controllerStatus")
         async def controller_status(controller_id: str):
-            if controller_id != self.controller["id"]:
+            if not self._matches_controller(controller_id):
                 return self._not_found("controller not found")
             return self._ok({"name": self.controller["name"]})
 
         @app.get("/{controller_id}/api/v2/maintenance/uiInterface")
         async def ui_interface(controller_id: str):
-            if controller_id != self.controller["id"]:
+            if not self._matches_controller(controller_id):
                 return self._not_found("controller not found")
             return self._ok({"controllerName": self.controller["name"]})
 

@@ -26,6 +26,7 @@ export interface TplinkRouterCardConfig {
   updown_color?: boolean;
   hide_header?: boolean;
   hide_filter_section?: boolean;
+  shift_click_underline?: boolean;
   default_filters?: {
     band?: "all" | "2g" | "5g" | "6g";
     connection?: "all" | "wifi" | "wired" | "iot" | "guest";

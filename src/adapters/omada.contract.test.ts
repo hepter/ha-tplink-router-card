@@ -2,11 +2,16 @@ import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
 import { describe, expect, it } from "vitest";
 import {
+  buildOmadaRows,
   buildOmadaClientMetrics,
   mapOmadaStateToRow,
   selectOmadaTrackers,
 } from "./omada";
-import type { EntityRegistryEntry, HassEntity } from "../core/types";
+import type {
+  DeviceRegistryEntry,
+  EntityRegistryEntry,
+  HassEntity,
+} from "../core/types";
 
 const loadFixture = <T>(name: string): T => {
   const filePath = resolve(process.cwd(), "fixtures", "omada", name);
@@ -181,5 +186,47 @@ describe("omada adapter contract fixtures", () => {
     };
     const selected = selectOmadaTrackers(states, [], "entry-a", false);
     expect(selected).toEqual([]);
+  });
+
+  it("builds omada rows per device and includes wired trackers without wireless attributes", () => {
+    const fixture = loadFixture<{
+      entryId: string;
+      states: Record<string, HassEntity>;
+      entityRegistry: EntityRegistryEntry[];
+      deviceRegistry: DeviceRegistryEntry[];
+    }>("device_based_rows.json");
+
+    const rows = buildOmadaRows(
+      fixture.states,
+      fixture.entityRegistry,
+      fixture.deviceRegistry,
+      fixture.entryId,
+      false,
+      "MBps",
+    );
+
+    expect(rows.map((row) => row.name)).toEqual([
+      "ER707-M2 Router",
+      "Client WiFi 1",
+      "Client Wired 1",
+      "Omada Controller",
+    ]);
+
+    const wired = rows.find((row) => row.name === "Client Wired 1");
+    expect(wired?.connection).toBe("Wired");
+    expect(wired?.connectionType).toBe("wired");
+    expect(wired?.upSpeed).toBe("—");
+    expect(wired?.downSpeed).toBe("—");
+
+    const wifi = rows.find((row) => row.name === "Client WiFi 1");
+    expect(wifi?.connectionType).toBe("wifi");
+    expect(wifi?.connection).toBe("WiFi");
+    expect(wifi?.ip).toBe("10.50.0.31");
+    expect(wifi?.upSpeed).toBe("0.50 MB/s");
+    expect(wifi?.downSpeed).toBe("1.25 MB/s");
+    expect(wifi?.signal).toBe("-51 dBm");
+    expect(wifi?.snr).toBe("—");
+    expect(wifi?.powerSave).toBe("—");
+    expect(wifi?.deviceId).toBe("dev-client-wifi");
   });
 });

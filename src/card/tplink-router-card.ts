@@ -3,11 +3,13 @@ import { cardStyles } from "./styles";
 import { localize } from "../i18n";
 import { buildDiagnosticPackage } from "../utils/export-utils";
 import { matchAction } from "../utils/action-matcher";
+import {
+  buildActionDeviceOptions,
+  type ActionDeviceOption,
+} from "../utils/action-device-options";
 import { formatSpeed } from "../utils/format";
 import {
-  buildOmadaClientMetrics,
-  mapOmadaStateToRow,
-  selectOmadaTrackers,
+  buildOmadaRows,
 } from "../adapters/omada";
 import {
   detectLinkRateUnit,
@@ -112,15 +114,19 @@ const FILTER_STATUS_VALUES = new Set<FilterStatus>(["all", "online", "offline"])
 type ActionItem = {
   entity_id: string;
   domain: "switch" | "button";
-  kind: "host" | "guest" | "iot" | "router";
-  band?: "2g" | "5g" | "6g";
   label: string;
   icon: string;
   isOn: boolean;
   available: boolean;
   requiresHold: boolean;
+  band?: "2g" | "5g" | "6g";
   deviceId?: string;
   deviceName?: string;
+};
+
+type HeaderActionItem = ActionItem & {
+  kind: "host" | "guest" | "iot" | "router";
+  band?: "2g" | "5g" | "6g";
   isGlobalCommon: boolean;
 };
 
@@ -137,7 +143,6 @@ type SpeedTooltipState = {
 const HOLD_DURATION_MS = 1000;
 const CARD_VERSION = import.meta.env.VITE_CARD_VERSION ?? "dev";
 type RowData = MappedTrackerRow;
-type ActionDeviceOption = { deviceId: string; deviceName: string };
 const ROWS_CACHE_BY_ENTRY = new Map<string, RowData[]>();
 const ENTRY_TITLE_CACHE = new Map<string, string>();
 const DEFAULT_FILTER_UNSET = "__saved__";
@@ -147,6 +152,19 @@ const SUPPORTED_ENTRY_DOMAINS = new Set([
   "tplink_deco",
   "omada",
   "tplink_omada",
+]);
+const SHIFT_ENTITY_CLICKABLE_COLUMNS = new Set([
+  "down",
+  "up",
+  "tx",
+  "rx",
+  "downloaded",
+  "uploaded",
+  "online",
+  "traffic",
+  "signal",
+  "snr",
+  "powerSave",
 ]);
 const AUTO_REFRESH_INTERVAL_MS = 5 * 60 * 1000;// minutes
 
@@ -177,6 +195,13 @@ const compareValues = (a: unknown, b: unknown) => {
   return collator.compare(String(a), String(b));
 };
 
+const parseActionBand = (text: string): "2g" | "5g" | "6g" | undefined => {
+  if (/(2\.4|2_4|2g|2ghz|24g)/i.test(text)) return "2g";
+  if (/(5g|5ghz)/i.test(text)) return "5g";
+  if (/(6g|6ghz)/i.test(text)) return "6g";
+  return undefined;
+};
+
 const isEmptySortValue = (value: unknown) => {
   if (value === null || value === undefined) return true;
   if (typeof value === "number") return !Number.isFinite(value);
@@ -200,6 +225,7 @@ export class TplinkRouterCard extends LitElement {
     _showExportButton: { state: true },
     _speedTooltip: { state: true },
     _selectedActionDeviceId: { state: true },
+    _isShiftPressed: { state: true },
   } as const;
 
   static styles = cardStyles;
@@ -223,6 +249,7 @@ export class TplinkRouterCard extends LitElement {
   private _showExportButton = false;
   private _speedTooltip: SpeedTooltipState | null = null;
   private _selectedActionDeviceId: string | null = null;
+  private _isShiftPressed = false;
   private _speedTooltipOpenTimer?: number;
   private _speedTooltipHideTimer?: number;
   private _refreshTimer?: number;
@@ -254,6 +281,7 @@ export class TplinkRouterCard extends LitElement {
       speed_unit: "MBps",
       txrx_color: true,
       updown_color: true,
+      shift_click_underline: true,
       ...normalized,
       default_filters: normalizedDefaultFilters ?? undefined,
       upload_speed_color_max: uploadSpeedColorMax,
@@ -283,6 +311,11 @@ export class TplinkRouterCard extends LitElement {
       this._isPageVisible = !document.hidden;
       document.addEventListener("visibilitychange", this._handleVisibilityChange);
     }
+    if (typeof window !== "undefined") {
+      window.addEventListener("keydown", this._handleWindowKeyDown);
+      window.addEventListener("keyup", this._handleWindowKeyUp);
+      window.addEventListener("blur", this._handleWindowBlur);
+    }
     this._attachVisibilityObserver();
     this._updateRefreshScheduling();
   }
@@ -301,6 +334,11 @@ export class TplinkRouterCard extends LitElement {
     if (typeof document !== "undefined") {
       document.removeEventListener("visibilitychange", this._handleVisibilityChange);
     }
+    if (typeof window !== "undefined") {
+      window.removeEventListener("keydown", this._handleWindowKeyDown);
+      window.removeEventListener("keyup", this._handleWindowKeyUp);
+      window.removeEventListener("blur", this._handleWindowBlur);
+    }
     if (this._visibilityObserver) {
       this._visibilityObserver.disconnect();
       this._visibilityObserver = undefined;
@@ -313,6 +351,24 @@ export class TplinkRouterCard extends LitElement {
       this._maybeRefreshOnVisible();
     }
     this._updateRefreshScheduling();
+  };
+
+  private _handleWindowKeyDown = (ev: KeyboardEvent) => {
+    if (ev.key === "Shift" && !this._isShiftPressed) {
+      this._isShiftPressed = true;
+    }
+  };
+
+  private _handleWindowKeyUp = (ev: KeyboardEvent) => {
+    if (ev.key === "Shift" && this._isShiftPressed) {
+      this._isShiftPressed = false;
+    }
+  };
+
+  private _handleWindowBlur = () => {
+    if (this._isShiftPressed) {
+      this._isShiftPressed = false;
+    }
   };
 
   private _attachVisibilityObserver() {
@@ -683,10 +739,43 @@ export class TplinkRouterCard extends LitElement {
     this._filter = target.value ?? "";
   }
 
-  private _matchesFilter(text: string): boolean {
-    const needle = this._filter.trim().toLowerCase();
-    if (!needle) return true;
-    return text.toLowerCase().includes(needle);
+  private _parseRegexSearch(rawFilter: string): RegExp | null {
+    if (rawFilter.length < 2) return null;
+    if (!rawFilter.startsWith("/") || !rawFilter.endsWith("/")) return null;
+    const pattern = rawFilter.slice(1, -1);
+    if (!pattern) return null;
+    try {
+      return new RegExp(pattern, "i");
+    } catch {
+      return null;
+    }
+  }
+
+  private _searchValueToText(value: unknown): string {
+    if (value === null || value === undefined) return "";
+    if (typeof value === "string") return value;
+    if (typeof value === "number" || typeof value === "boolean") return String(value);
+    if (Array.isArray(value)) {
+      return value.map((item) => this._searchValueToText(item)).join(" ");
+    }
+    if (typeof value === "object") {
+      try {
+        return JSON.stringify(value);
+      } catch {
+        return "";
+      }
+    }
+    return String(value);
+  }
+
+  private _buildRowSearchValues(row: RowData): string[] {
+    return Object.values(row)
+      .map((value) => this._searchValueToText(value))
+      .filter((value) => value.length > 0);
+  }
+
+  private _buildRowSearchText(row: RowData): string {
+    return this._buildRowSearchValues(row).join(" ");
   }
 
   private _setFilter(group: keyof FilterState, value: FilterState[keyof FilterState]) {
@@ -854,6 +943,176 @@ export class TplinkRouterCard extends LitElement {
     this._openUrl(`${base}/config/devices/device/${deviceId}`);
   }
 
+  private _isOmadaDomain(entryDomain: string | undefined) {
+    return entryDomain === "omada" || entryDomain === "tplink_omada";
+  }
+
+  private _isRouterClientDomain(entryDomain: string | undefined) {
+    return entryDomain === "tplink_router" || entryDomain === "tplink_deco";
+  }
+
+  private _isNameClickable(row: RowData, entryDomain: string | undefined) {
+    if (this._isOmadaDomain(entryDomain)) {
+      return Boolean(row.deviceId);
+    }
+    if (this._isRouterClientDomain(entryDomain)) {
+      return Boolean(row.entity_id);
+    }
+    return Boolean(row.entity_id);
+  }
+
+  private _hasMeaningfulCellValue(row: RowData, columnKey: string) {
+    switch (columnKey) {
+      case "down":
+        return row.downSpeed !== "—";
+      case "up":
+        return row.upSpeed !== "—";
+      case "tx":
+        return row.txRate !== "—";
+      case "rx":
+        return row.rxRate !== "—";
+      case "downloaded":
+        return row.downloaded !== "—";
+      case "uploaded":
+        return row.uploaded !== "—";
+      case "online":
+        return row.onlineTime !== "—";
+      case "traffic":
+        return row.trafficUsage !== "—";
+      case "signal":
+        return row.signal !== "—";
+      case "snr":
+        return row.snr !== "—";
+      case "powerSave":
+        return row.powerSave !== "—";
+      default:
+        return false;
+    }
+  }
+
+  private _findEntityByKeywords(
+    states: HassEntity[],
+    keywords: string[],
+    allowedDomains?: string[],
+  ): string | undefined {
+    const domains = allowedDomains ? new Set(allowedDomains) : null;
+    for (const state of states) {
+      const domain = state.entity_id.split(".", 1)[0];
+      if (domains && !domains.has(domain)) continue;
+      const text = `${state.entity_id} ${String(state.attributes.friendly_name ?? "")}`.toLowerCase();
+      if (keywords.some((keyword) => text.includes(keyword))) {
+        return state.entity_id;
+      }
+    }
+    return undefined;
+  }
+
+  private _resolveShiftEntityForColumn(
+    row: RowData,
+    columnKey: string,
+    entryId: string | undefined,
+  ): string | null {
+    if (!this._isOmadaDomain(this._resolveEntryDomain(entryId))) return null;
+    const states = row.deviceId
+      ? this._getStatesForDevice(entryId, row.deviceId)
+      : this._getEntryStates(entryId).filter((state) => state.entity_id === row.entity_id);
+    if (states.length === 0) return null;
+
+    switch (columnKey) {
+      case "down":
+        return this._findEntityByKeywords(
+          states,
+          ["rx_activity", "rx activity", "download"],
+          ["sensor"],
+        ) ?? null;
+      case "up":
+        return this._findEntityByKeywords(
+          states,
+          ["tx_activity", "tx activity", "upload"],
+          ["sensor"],
+        ) ?? null;
+      case "tx":
+        return this._findEntityByKeywords(
+          states,
+          ["tx_activity", "tx activity", "tx_rate", "tx rate"],
+          ["sensor"],
+        ) ?? null;
+      case "rx":
+        return this._findEntityByKeywords(
+          states,
+          ["rx_activity", "rx activity", "rx_rate", "rx rate"],
+          ["sensor"],
+        ) ?? null;
+      case "online":
+        return this._findEntityByKeywords(
+          states,
+          ["uptime", "duration", "connected"],
+          ["sensor"],
+        ) ?? null;
+      case "traffic":
+        return this._findEntityByKeywords(
+          states,
+          ["downloaded", "uploaded", "traffic"],
+          ["sensor"],
+        ) ?? null;
+      case "downloaded":
+        return this._findEntityByKeywords(states, ["downloaded"], ["sensor"]) ?? null;
+      case "uploaded":
+        return this._findEntityByKeywords(states, ["uploaded"], ["sensor"]) ?? null;
+      case "signal":
+        return this._findEntityByKeywords(states, ["rssi", "signal"], ["sensor"]) ?? null;
+      case "snr":
+        return this._findEntityByKeywords(states, ["snr"], ["sensor"]) ?? null;
+      case "powerSave":
+        return this._findEntityByKeywords(
+          states,
+          ["power_save", "power save"],
+          ["binary_sensor", "switch"],
+        ) ?? null;
+      default:
+        return null;
+    }
+  }
+
+  private _isShiftEntityCellClickable(
+    entryDomain: string | undefined,
+    columnKey: string,
+    row: RowData,
+    entryId: string | undefined,
+  ) {
+    return (
+      this._isOmadaDomain(entryDomain) &&
+      SHIFT_ENTITY_CLICKABLE_COLUMNS.has(columnKey) &&
+      this._hasMeaningfulCellValue(row, columnKey) &&
+      Boolean(this._resolveShiftEntityForColumn(row, columnKey, entryId))
+    );
+  }
+
+  private _handleShiftEntityCellClick(
+    ev: MouseEvent,
+    row: RowData,
+    columnKey: string,
+    entryId: string | undefined,
+  ) {
+    if (!(ev.shiftKey || this._isShiftPressed)) return;
+    const target = ev.target as HTMLElement | null;
+    if (target?.closest("button, a, input, select, textarea")) return;
+    const entityId = this._resolveShiftEntityForColumn(row, columnKey, entryId);
+    if (!entityId) return;
+    ev.preventDefault();
+    ev.stopPropagation();
+    this._showMoreInfo(entityId);
+  }
+
+  private _handleNameClick(ev: MouseEvent, row: RowData, entryDomain: string | undefined) {
+    if (this._isOmadaDomain(entryDomain)) {
+      if (row.deviceId) this._openDevicePage(row.deviceId);
+      return;
+    }
+
+    this._showMoreInfo(row.entity_id);
+  }
+
   private _getEntityRows(): RowData[] {
     if (!this.hass) return [];
 
@@ -873,31 +1132,14 @@ export class TplinkRouterCard extends LitElement {
     let rows: RowData[] = [];
 
     if (entryDomain === "omada" || entryDomain === "tplink_omada") {
-      const trackers = selectOmadaTrackers(
+      rows = buildOmadaRows(
         this.hass.states,
         this._entityRegistry,
+        this._deviceRegistry,
         entryId,
         this._registryFailed,
+        this._config?.speed_unit ?? "MBps",
       );
-      const metricsByDevice = buildOmadaClientMetrics(
-        this.hass.states,
-        this._entityRegistry,
-        entryId,
-      );
-      const trackerDeviceIdByEntity = new Map(
-        this._entityRegistry
-          .filter((item) => item.entity_id.startsWith("device_tracker."))
-          .map((item) => [item.entity_id, item.device_id] as const),
-      );
-
-      rows = trackers.map((state) => {
-        const deviceId = trackerDeviceIdByEntity.get(state.entity_id);
-        return mapOmadaStateToRow(
-          state,
-          this._config?.speed_unit ?? "MBps",
-          deviceId ? metricsByDevice.get(deviceId) : undefined,
-        );
-      });
     } else {
       const entities = selectRouterTrackers(
         this.hass.states,
@@ -907,9 +1149,21 @@ export class TplinkRouterCard extends LitElement {
       );
 
       const linkRateUnit = detectLinkRateUnit(entities);
+      const trackerDeviceIdByEntity = new Map(
+        this._entityRegistry
+          .filter((item) => item.entity_id.startsWith("device_tracker.") && item.device_id)
+          .map((item) => [item.entity_id, item.device_id as string] as const),
+      );
 
       rows = entities.map((state) =>
-        mapTrackerStateToRow(state, this._config?.speed_unit ?? "MBps", linkRateUnit),
+        ({
+          ...mapTrackerStateToRow(
+            state,
+            this._config?.speed_unit ?? "MBps",
+            linkRateUnit,
+          ),
+          deviceId: trackerDeviceIdByEntity.get(state.entity_id),
+        }) as RowData,
       );
     }
 
@@ -923,7 +1177,44 @@ export class TplinkRouterCard extends LitElement {
     return rows;
   }
 
-  private _getActionItems(entryId: string | undefined, entryDomain?: string): ActionItem[] {
+  private _isGlobalCommonAction(text: string) {
+    return (
+      text.includes("data fetching") ||
+      text.includes("scanning") ||
+      text.includes("wlan optimization") ||
+      text.includes("rf planning") ||
+      text.includes("ai optimization")
+    );
+  }
+
+  private _requiresHoldAction(
+    domain: ActionItem["domain"],
+    text: string,
+  ) {
+    if (
+      text.includes("reboot") ||
+      text.includes("restart") ||
+      text.includes("reconnect") ||
+      text.includes("wlan optimization") ||
+      text.includes("rf planning")
+    ) {
+      return true;
+    }
+    if (
+      domain === "switch" &&
+      (text.includes("wifi") ||
+        text.includes("wlan") ||
+        text.includes("radio") ||
+        text.includes("ssid") ||
+        text.includes("guest") ||
+        text.includes("iot"))
+    ) {
+      return true;
+    }
+    return false;
+  }
+
+  private _getActionItems(entryId: string | undefined): ActionItem[] {
     if (!this.hass || !entryId || this._entityRegistry.length === 0) return [];
     const registry = this._entityRegistry.filter((entry) => entry.config_entry_id === entryId);
     const registryByEntity = new Map(registry.map((entry) => [entry.entity_id, entry] as const));
@@ -942,18 +1233,10 @@ export class TplinkRouterCard extends LitElement {
           (state.attributes as Record<string, unknown>).friendly_name ?? state.entity_id,
         );
         const text = `${state.entity_id} ${friendly}`.toLowerCase();
-        const matched = matchAction(domain, state.entity_id, friendly, entryDomain);
-        if (!matched) return null;
 
         const registryEntry = registryByEntity.get(state.entity_id);
-        const deviceId = registryEntry?.device_id;
+        const deviceId = registryEntry?.device_id ?? registryEntry?.entity_id;
         const device = deviceId ? deviceById.get(deviceId) : undefined;
-        const isGlobalCommon =
-          text.includes("data fetching") ||
-          text.includes("scanning") ||
-          text.includes("wlan optimization") ||
-          text.includes("rf planning") ||
-          text.includes("ai optimization");
 
         const icon = String(
           (state.attributes as Record<string, unknown>).icon ??
@@ -966,54 +1249,104 @@ export class TplinkRouterCard extends LitElement {
         return {
           entity_id: state.entity_id,
           domain,
-          kind: matched.kind,
-          band: matched.band,
           label: friendly,
           icon,
           isOn,
           available,
-          requiresHold: matched.requiresHold,
+          requiresHold: this._requiresHoldAction(domain, text),
+          band: parseActionBand(text),
           deviceId,
           deviceName: device?.name_by_user ?? device?.name,
-          isGlobalCommon,
         } as ActionItem;
       })
       .filter((item): item is ActionItem => item !== null);
   }
 
-  private _isRouterLikeActionDevice(device: DeviceRegistryEntry | undefined) {
-    if (!device) return false;
-    const manufacturer = `${device.manufacturer ?? ""}`.toLowerCase();
-    const model = `${device.model ?? ""}`.toLowerCase();
-    const name = `${device.name_by_user ?? device.name ?? ""}`.toLowerCase();
-    const text = `${manufacturer} ${model} ${name}`;
-    if (manufacturer.includes("tp-link") || manufacturer.includes("tplink")) return true;
-    return /(archer|deco|omada|gateway|switch|access point|eap|er|sg|router)/i.test(text);
+  private _collectInfrastructureActionDeviceIds(actionItems: ActionItem[]) {
+    const byDevice = new Map<string, string[]>();
+    for (const item of actionItems) {
+      if (!item.deviceId) continue;
+      const list = byDevice.get(item.deviceId) ?? [];
+      list.push(`${item.entity_id} ${item.label}`.toLowerCase());
+      byDevice.set(item.deviceId, list);
+    }
+
+    const infrastructure = new Set<string>();
+    for (const [deviceId, texts] of byDevice.entries()) {
+      const hasInfraAction = texts.some((text) =>
+        text.includes("reboot") ||
+        text.includes("restart") ||
+        text.includes(" radio") ||
+        text.includes("radio_") ||
+        text.includes("_radio") ||
+        text.includes("ssid") ||
+        text.includes("_wlan") ||
+        text.includes("guest wifi") ||
+        text.includes("iot wifi") ||
+        text.includes("wlan"),
+      );
+      if (hasInfraAction) infrastructure.add(deviceId);
+    }
+    return infrastructure;
+  }
+
+  private _getHeaderActionItems(
+    actionItems: ActionItem[],
+    entryDomain: string | undefined,
+    infrastructureDeviceIds: Set<string>,
+  ): HeaderActionItem[] {
+    return actionItems
+      .map((item) => {
+        const matched = matchAction(
+          item.domain,
+          item.entity_id,
+          item.label,
+          entryDomain,
+        );
+        if (!matched) return null;
+
+        const text = `${item.entity_id} ${item.label}`.toLowerCase();
+        const isGlobalCommon = this._isGlobalCommonAction(text);
+        const isInfrastructureDevice = item.deviceId
+          ? infrastructureDeviceIds.has(item.deviceId)
+          : false;
+        if (!isGlobalCommon && !isInfrastructureDevice) return null;
+
+        return {
+          ...item,
+          ...matched,
+          isGlobalCommon,
+        } satisfies HeaderActionItem;
+      })
+      .filter((item): item is HeaderActionItem => item !== null);
+  }
+
+  private _getRowActionsByDevice(actionItems: ActionItem[]) {
+    const rowActionsByDevice = new Map<string, ActionItem[]>();
+
+    for (const item of actionItems) {
+      if (!item.deviceId) continue;
+      const text = `${item.entity_id} ${item.label}`.toLowerCase();
+      if (this._isGlobalCommonAction(text)) continue;
+
+      const list = rowActionsByDevice.get(item.deviceId) ?? [];
+      list.push(item);
+      rowActionsByDevice.set(item.deviceId, list);
+    }
+
+    for (const list of rowActionsByDevice.values()) {
+      list.sort((a, b) => {
+        const domainOrder = a.domain === b.domain ? 0 : a.domain === "button" ? -1 : 1;
+        if (domainOrder !== 0) return domainOrder;
+        return compareValues(a.label, b.label);
+      });
+    }
+
+    return rowActionsByDevice;
   }
 
   private _buildActionDeviceOptions(actionItems: ActionItem[]): ActionDeviceOption[] {
-    const byDevice = new Map<string, ActionDeviceOption>();
-    const deviceById = new Map(this._deviceRegistry.map((device) => [device.id, device] as const));
-    for (const item of actionItems) {
-      if (item.isGlobalCommon) continue;
-      if (!item.deviceId) continue;
-      if (byDevice.has(item.deviceId)) continue;
-      const device = deviceById.get(item.deviceId);
-      byDevice.set(item.deviceId, {
-        deviceId: item.deviceId,
-        deviceName:
-          item.deviceName ??
-          device?.name_by_user ??
-          device?.name ??
-          item.deviceId.slice(0, 8),
-      });
-    }
-    const options = [...byDevice.values()];
-    const routerLike = options.filter((option) =>
-      this._isRouterLikeActionDevice(deviceById.get(option.deviceId)),
-    );
-    const selected = routerLike.length > 0 ? routerLike : options;
-    return selected.sort((a, b) => compareValues(a.deviceName, b.deviceName));
+    return buildActionDeviceOptions(actionItems, this._deviceRegistry);
   }
 
   private _actionDeviceChanged(ev: Event) {
@@ -1090,7 +1423,6 @@ export class TplinkRouterCard extends LitElement {
       console.error("[tplink-router-card] action failed", {
         entity_id: item.entity_id,
         domain: item.domain,
-        kind: item.kind,
         error,
       });
     });
@@ -1436,28 +1768,66 @@ export class TplinkRouterCard extends LitElement {
     const availableConnections = new Set(
       rows.map((row) => row.connectionType).filter((c) => c !== "unknown"),
     );
-    const needle = this._filter.trim().toLowerCase();
-    const needleMac = normalizeMac(needle);
-    const isMacSearch = needle.length > 1 && looksLikeMac(needle);
+    const bandFilterOptions: FilterBand[] = [
+      "all",
+      ...(["2g", "5g", "6g"] as const).filter((value) => availableBands.has(value)),
+    ];
+    const connectionFilterOptions: FilterConnection[] = [
+      "all",
+      ...(["wifi", "wired", "iot", "guest"] as const).filter((value) =>
+        availableConnections.has(value),
+      ),
+    ];
+    const hasOnlineRows = rows.some((row) => row.isOnline);
+    const hasOfflineRows = rows.some((row) => !row.isOnline);
+    const statusFilterOptions: FilterStatus[] = [
+      "all",
+      ...(hasOnlineRows ? (["online"] as const) : []),
+      ...(hasOfflineRows ? (["offline"] as const) : []),
+    ];
+    const activeBandFilter: FilterBand = bandFilterOptions.includes(this._filters.band)
+      ? this._filters.band
+      : "all";
+    const activeConnectionFilter: FilterConnection = connectionFilterOptions.includes(
+      this._filters.connection,
+    )
+      ? this._filters.connection
+      : "all";
+    const activeStatusFilter: FilterStatus = statusFilterOptions.includes(this._filters.status)
+      ? this._filters.status
+      : "all";
+    const rawNeedle = this._filter.trim();
+    const regexSearch = this._parseRegexSearch(rawNeedle);
+    const plainNeedle = rawNeedle.toLowerCase();
+    const needleMac = normalizeMac(plainNeedle);
+    const isMacSearch =
+      !regexSearch && plainNeedle.length > 1 && looksLikeMac(plainNeedle);
 
     const filtered = rows.filter((row) => {
-      const haystack = [row.name, row.ip, row.mac, row.hostname, row.entity_id].join(" ");
-      if (needle) {
-        if (isMacSearch) {
+      const searchValues = this._buildRowSearchValues(row);
+      const haystack = searchValues.join(" ");
+      if (rawNeedle) {
+        if (regexSearch) {
+          const matched = searchValues.some((value) => {
+            regexSearch.lastIndex = 0;
+            return regexSearch.test(value);
+          });
+          if (!matched) return false;
+        } else if (isMacSearch) {
           if (!row.macNormalized.includes(needleMac)) return false;
-        } else if (!this._matchesFilter(haystack)) {
-          return false;
+        } else {
+          if (!haystack.toLowerCase().includes(plainNeedle)) return false;
         }
       }
 
-      const bandFilter = this._filters.band;
+      const bandFilter = activeBandFilter;
       if (bandFilter !== "all" && row.bandType !== bandFilter) return false;
 
-      const connFilter = this._filters.connection;
+      const connFilter = activeConnectionFilter;
       const connType = row.connectionType;
       if (connFilter !== "all" && connType !== connFilter) return false;
 
-      const statusFilter = this._filters.status;
+      const statusFilter = activeStatusFilter;
       if (statusFilter !== "all") {
         if (statusFilter === "online" && !row.isOnline) return false;
         if (statusFilter === "offline" && row.isOnline) return false;
@@ -1483,10 +1853,14 @@ export class TplinkRouterCard extends LitElement {
       {
         key: "band",
         label: t("columns.band"),
-        sort: (row: RowData) =>
-          row.band === "—"
-            ? null
-            : ({ "2g": 1, "5g": 2, "6g": 3, unknown: 99 } as const)[row.bandType],
+        sort: (row: RowData) => {
+          if (row.connectionType === "wired") return 0;
+          if (row.bandType === "2g") return 1;
+          if (row.bandType === "5g") return 2;
+          if (row.bandType === "6g") return 3;
+          if (row.connectionType === "wifi") return 4;
+          return null;
+        },
       },
       { key: "ip", label: t("columns.ip"), sort: (row: RowData) => row.ip },
       { key: "mac", label: t("columns.mac"), sort: (row: RowData) => row.mac },
@@ -1519,11 +1893,27 @@ export class TplinkRouterCard extends LitElement {
         sort: (row: RowData) => row.onlineTimeValue,
       },
       {
+        key: "downloaded",
+        label: t("columns.downloaded"),
+        sort: (row: RowData) => row.downloadedValue,
+      },
+      {
+        key: "uploaded",
+        label: t("columns.uploaded"),
+        sort: (row: RowData) => row.uploadedValue,
+      },
+      {
         key: "traffic",
         label: t("columns.traffic"),
         sort: (row: RowData) => row.trafficUsageValue,
       },
       { key: "signal", label: t("columns.signal"), sort: (row: RowData) => row.signalValue },
+      { key: "snr", label: t("columns.snr"), sort: (row: RowData) => row.snrValue },
+      {
+        key: "powerSave",
+        label: t("columns.powerSave"),
+        sort: (row: RowData) => row.powerSaveValue,
+      },
       {
         key: "deviceType",
         label: t("columns.deviceType"),
@@ -1543,6 +1933,11 @@ export class TplinkRouterCard extends LitElement {
         key: "deviceStatus",
         label: t("columns.deviceStatus"),
         sort: (row: RowData) => row.deviceStatus,
+      },
+      {
+        key: "actions",
+        label: t("columns.actions"),
+        sort: (row: RowData) => rowActionsByDevice.get(row.deviceId ?? "")?.length ?? null,
       },
     ];
     const configuredColumns = Array.isArray(this._config?.columns) ? this._config.columns : [];
@@ -1633,7 +2028,14 @@ export class TplinkRouterCard extends LitElement {
         </span>
       `;
     };
-    const actionItems = this._getActionItems(entryId, entryDomain);
+    const actionItems = this._getActionItems(entryId);
+    const infrastructureActionDeviceIds = this._collectInfrastructureActionDeviceIds(actionItems);
+    const headerActionItems = this._getHeaderActionItems(
+      actionItems,
+      entryDomain,
+      infrastructureActionDeviceIds,
+    );
+    const rowActionsByDevice = this._getRowActionsByDevice(actionItems);
     const holdSeconds = Math.max(1, Math.round(HOLD_DURATION_MS / 1000));
     const routerEntityId = this._getRouterEntityId(entryId);
     const entryTitle = selectedEntry?.title ?? cachedEntryTitle;
@@ -1662,7 +2064,7 @@ export class TplinkRouterCard extends LitElement {
         : nonTrackerEntryStates;
     const localUrl = this._getLocalUrl(entryTitle, routerDevice, routerStates);
     const publicIp = this._getPublicIp(routerStates);
-    const stats = this._getRouterStats(routerStates);
+    const routerStats = this._getRouterStats(routerStates);
     const routerDetails = this._getRouterDetails(routerStates, routerDevice);
     const routerInfoLines = [
       routerDetails.model ?? null,
@@ -1677,13 +2079,26 @@ export class TplinkRouterCard extends LitElement {
       : t("card.routerNotSelected");
     const hideHeader = Boolean(this._config?.hide_header);
     const hideFilterSection = Boolean(this._config?.hide_filter_section);
+    const showBandFilterGroup = bandFilterOptions.length > 1;
+    const showConnectionFilterGroup = connectionFilterOptions.length > 1;
+    const showStatusFilterGroup = statusFilterOptions.length > 1;
+    const showAnyFilterGroup =
+      showBandFilterGroup || showConnectionFilterGroup || showStatusFilterGroup;
 
-    const actionDeviceOptions = this._buildActionDeviceOptions(actionItems);
+    const actionDeviceOptions = this._buildActionDeviceOptions(headerActionItems);
     const selectedActionDeviceId =
       actionDeviceOptions.find((option) => option.deviceId === this._selectedActionDeviceId)
         ?.deviceId ??
       actionDeviceOptions[0]?.deviceId;
-    const visibleActionItems = actionItems.filter((item) => {
+    const selectedRouterDeviceId = selectedActionDeviceId ?? routerDevice?.id;
+    const selectedActionStates = selectedActionDeviceId
+      ? this._getStatesForDevice(entryId, selectedActionDeviceId)
+      : [];
+    const stats =
+      selectedActionStates.length > 0
+        ? this._getRouterStats(selectedActionStates)
+        : routerStats;
+    const visibleActionItems = headerActionItems.filter((item) => {
       if (item.isGlobalCommon) return true;
       if (!selectedActionDeviceId) return true;
       return item.deviceId === selectedActionDeviceId;
@@ -1724,8 +2139,16 @@ export class TplinkRouterCard extends LitElement {
         }),
     };
 
+    const underlineOnShift = this._config?.shift_click_underline !== false;
+    const cardClasses = [
+      this._isShiftPressed ? "shift-mode" : "",
+      underlineOnShift ? "shift-underline-enabled" : "shift-underline-disabled",
+    ]
+      .filter((value) => value.length > 0)
+      .join(" ");
+
     return html`
-      <ha-card>
+      <ha-card class=${cardClasses}>
         <div class="header ${hideHeader ? "hidden" : ""}">
           <div class="title">
             <div
@@ -2005,14 +2428,14 @@ export class TplinkRouterCard extends LitElement {
                     </span>
                   `
         : ""}
-              ${routerDevice?.id || routerEntityId
+              ${selectedRouterDeviceId || routerEntityId
         ? html`
                     <button
                       class="icon-button"
                       title=${t("actions.router")}
                       @click=${() => {
-            if (routerDevice?.id) {
-              this._openDevicePage(routerDevice.id);
+            if (selectedRouterDeviceId) {
+              this._openDevicePage(selectedRouterDeviceId);
             } else if (routerEntityId) {
               this._showMoreInfo(routerEntityId);
             }
@@ -2026,131 +2449,163 @@ export class TplinkRouterCard extends LitElement {
           </div>
         </div>
 
-        <div class="filter-row ${hideFilterSection ? "hidden" : ""}">
-          <div class="filter-group">
-            <button
-              class="filter-button ${this._filters.band === "all" ? "active" : ""}"
-              data-group="band"
-              data-value="all"
-              @click=${this._filterButtonClick}
-            >
-              ${t("filters.all")}
-            </button>
-            ${availableBands.has("2g")
+        <div class="filter-row ${hideFilterSection || !showAnyFilterGroup ? "hidden" : ""}">
+          ${showBandFilterGroup
         ? html`
+                <div class="filter-group">
                   <button
-                    class="filter-button ${this._filters.band === "2g" ? "active" : ""}"
+                    class="filter-button ${activeBandFilter === "all" ? "active" : ""}"
                     data-group="band"
-                    data-value="2g"
+                    data-value="all"
                     @click=${this._filterButtonClick}
                   >
-                    ${t("filters.band2")}
+                    ${t("filters.all")}
                   </button>
-                `
+                  ${bandFilterOptions.includes("2g")
+            ? html`
+                        <button
+                          class="filter-button ${activeBandFilter === "2g" ? "active" : ""}"
+                          data-group="band"
+                          data-value="2g"
+                          @click=${this._filterButtonClick}
+                        >
+                          ${t("filters.band2")}
+                        </button>
+                      `
+            : ""}
+                  ${bandFilterOptions.includes("5g")
+            ? html`
+                        <button
+                          class="filter-button ${activeBandFilter === "5g" ? "active" : ""}"
+                          data-group="band"
+                          data-value="5g"
+                          @click=${this._filterButtonClick}
+                        >
+                          ${t("filters.band5")}
+                        </button>
+                      `
+            : ""}
+                  ${bandFilterOptions.includes("6g")
+            ? html`
+                        <button
+                          class="filter-button ${activeBandFilter === "6g" ? "active" : ""}"
+                          data-group="band"
+                          data-value="6g"
+                          @click=${this._filterButtonClick}
+                        >
+                          ${t("filters.band6")}
+                        </button>
+                      `
+            : ""}
+                </div>
+              `
         : ""}
-            ${availableBands.has("5g")
-        ? html`
-                  <button
-                    class="filter-button ${this._filters.band === "5g" ? "active" : ""}"
-                    data-group="band"
-                    data-value="5g"
-                    @click=${this._filterButtonClick}
-                  >
-                    ${t("filters.band5")}
-                  </button>
-                `
-        : ""}
-            ${availableBands.has("6g")
-        ? html`
-                  <button
-                    class="filter-button ${this._filters.band === "6g" ? "active" : ""}"
-                    data-group="band"
-                    data-value="6g"
-                    @click=${this._filterButtonClick}
-                  >
-                    ${t("filters.band6")}
-                  </button>
-                `
-        : ""}
-          </div>
 
-          <div class="filter-group">
-            <button
-              class="filter-button ${this._filters.connection === "all" ? "active" : ""}"
-              data-group="connection"
-              data-value="all"
-              @click=${this._filterButtonClick}
-            >
-              ${t("filters.all")}
-            </button>
-            <button
-              class="filter-button icon ${this._filters.connection === "wifi" ? "active" : ""}"
-              data-group="connection"
-              data-value="wifi"
-              title=${t("filters.wifi")}
-              @click=${this._filterButtonClick}
-            >
-              <ha-icon icon="mdi:wifi"></ha-icon>
-            </button>
-            <button
-              class="filter-button icon ${this._filters.connection === "wired" ? "active" : ""}"
-              data-group="connection"
-              data-value="wired"
-              title=${t("filters.wired")}
-              @click=${this._filterButtonClick}
-            >
-              <ha-icon icon="mdi:lan"></ha-icon>
-            </button>
-            <button
-              class="filter-button icon ${this._filters.connection === "iot" ? "active" : ""}"
-              data-group="connection"
-              data-value="iot"
-              title=${t("filters.iot")}
-              @click=${this._filterButtonClick}
-            >
-              <ha-icon icon="mdi:chip"></ha-icon>
-            </button>
-            ${availableConnections.has("guest")
+          ${showConnectionFilterGroup
         ? html`
+                <div class="filter-group">
                   <button
-                    class="filter-button icon ${this._filters.connection === "guest" ? "active" : ""}"
+                    class="filter-button ${activeConnectionFilter === "all" ? "active" : ""}"
                     data-group="connection"
-                    data-value="guest"
-                    title=${t("filters.guest")}
+                    data-value="all"
                     @click=${this._filterButtonClick}
                   >
-                    <ha-icon icon="mdi:account-key"></ha-icon>
+                    ${t("filters.all")}
                   </button>
-                `
+                  ${connectionFilterOptions.includes("wifi")
+            ? html`
+                        <button
+                          class="filter-button icon ${activeConnectionFilter === "wifi" ? "active" : ""}"
+                          data-group="connection"
+                          data-value="wifi"
+                          title=${t("filters.wifi")}
+                          @click=${this._filterButtonClick}
+                        >
+                          <ha-icon icon="mdi:wifi"></ha-icon>
+                        </button>
+                      `
+            : ""}
+                  ${connectionFilterOptions.includes("wired")
+            ? html`
+                        <button
+                          class="filter-button icon ${activeConnectionFilter === "wired" ? "active" : ""}"
+                          data-group="connection"
+                          data-value="wired"
+                          title=${t("filters.wired")}
+                          @click=${this._filterButtonClick}
+                        >
+                          <ha-icon icon="mdi:lan"></ha-icon>
+                        </button>
+                      `
+            : ""}
+                  ${connectionFilterOptions.includes("iot")
+            ? html`
+                        <button
+                          class="filter-button icon ${activeConnectionFilter === "iot" ? "active" : ""}"
+                          data-group="connection"
+                          data-value="iot"
+                          title=${t("filters.iot")}
+                          @click=${this._filterButtonClick}
+                        >
+                          <ha-icon icon="mdi:chip"></ha-icon>
+                        </button>
+                      `
+            : ""}
+                  ${connectionFilterOptions.includes("guest")
+            ? html`
+                        <button
+                          class="filter-button icon ${activeConnectionFilter === "guest" ? "active" : ""}"
+                          data-group="connection"
+                          data-value="guest"
+                          title=${t("filters.guest")}
+                          @click=${this._filterButtonClick}
+                        >
+                          <ha-icon icon="mdi:account-key"></ha-icon>
+                        </button>
+                      `
+            : ""}
+                </div>
+              `
         : ""}
-          </div>
 
-          <div class="filter-group">
-            <button
-              class="filter-button ${this._filters.status === "all" ? "active" : ""}"
-              data-group="status"
-              data-value="all"
-              @click=${this._filterButtonClick}
-            >
-              ${t("filters.all")}
-            </button>
-            <button
-              class="filter-button ${this._filters.status === "online" ? "active" : ""}"
-              data-group="status"
-              data-value="online"
-              @click=${this._filterButtonClick}
-            >
-              ${t("filters.online")}
-            </button>
-            <button
-              class="filter-button ${this._filters.status === "offline" ? "active" : ""}"
-              data-group="status"
-              data-value="offline"
-              @click=${this._filterButtonClick}
-            >
-              ${t("filters.offline")}
-            </button>
-          </div>
+          ${showStatusFilterGroup
+        ? html`
+                <div class="filter-group">
+                  <button
+                    class="filter-button ${activeStatusFilter === "all" ? "active" : ""}"
+                    data-group="status"
+                    data-value="all"
+                    @click=${this._filterButtonClick}
+                  >
+                    ${t("filters.all")}
+                  </button>
+                  ${statusFilterOptions.includes("online")
+            ? html`
+                        <button
+                          class="filter-button ${activeStatusFilter === "online" ? "active" : ""}"
+                          data-group="status"
+                          data-value="online"
+                          @click=${this._filterButtonClick}
+                        >
+                          ${t("filters.online")}
+                        </button>
+                      `
+            : ""}
+                  ${statusFilterOptions.includes("offline")
+            ? html`
+                        <button
+                          class="filter-button ${activeStatusFilter === "offline" ? "active" : ""}"
+                          data-group="status"
+                          data-value="offline"
+                          @click=${this._filterButtonClick}
+                        >
+                          ${t("filters.offline")}
+                        </button>
+                      `
+            : ""}
+                </div>
+              `
+        : ""}
           <span class="chip compact">${t("card.onlineCount", { online: onlineCount, total: rows.length })}</span>
         </div>
 
@@ -2196,12 +2651,37 @@ export class TplinkRouterCard extends LitElement {
                         ${sorted.map(
               (row) => {
                 const isOffline = !row.isOnline;
+                const nameClickable = this._isNameClickable(row, entryDomain);
+                const showDeviceIcon = entryDomain === "tplink_router" && Boolean(row.deviceId);
+                const deviceTooltipLabel = `Device: ${row.name}`;
                 const cells: Record<string, unknown> = {
-                  name: html`
-                                <button class="link" @click=${() => this._showMoreInfo(row.entity_id)}>
-                                  ${row.name}
+                  name: nameClickable
+                    ? html`
+                        <span class="name-cell">
+                          <button
+                            class="link"
+                            @click=${(ev: MouseEvent) => this._handleNameClick(ev, row, entryDomain)}
+                          >
+                            ${row.name}
+                          </button>
+                          ${showDeviceIcon && row.deviceId
+                        ? html`
+                                <button
+                                  class="name-device-link"
+                                  title=${deviceTooltipLabel}
+                                  @click=${(ev: MouseEvent) => {
+                            ev.preventDefault();
+                            ev.stopPropagation();
+                            this._openDevicePage(row.deviceId as string);
+                          }}
+                                >
+                                  <ha-icon icon="mdi:router-wireless"></ha-icon>
                                 </button>
-                              `,
+                              `
+                        : nothing}
+                        </span>
+                      `
+                    : html`<span class="name-text">${row.name}</span>`,
                   status: html`
                                 <span class="status">
                                   <span class="status-dot" style=${`background:${row.statusColor}`}></span>
@@ -2219,7 +2699,13 @@ export class TplinkRouterCard extends LitElement {
                                       </span>
                                     `
                       : row.band === "—"
-                        ? "—"
+                        ? row.connectionType === "wifi"
+                          ? html`
+                                      <span class="band-pill band-wifi">
+                                        <ha-icon class="band-icon" icon="mdi:wifi"></ha-icon>
+                                      </span>
+                                    `
+                          : "—"
                         : html`
                                       <span class="band-pill band-${row.bandType}">
                                         <ha-icon class="band-icon" icon="mdi:wifi"></ha-icon>
@@ -2274,11 +2760,64 @@ export class TplinkRouterCard extends LitElement {
                                     `
                       : row.rxRate,
                   online: row.onlineTime,
+                  downloaded: row.downloaded,
+                  uploaded: row.uploaded,
                   traffic: row.trafficUsage,
                   deviceType: row.deviceType ?? "—",
                   deviceModel: row.deviceModel ?? "—",
                   deviceFirmware: row.deviceFirmware ?? "—",
                   deviceStatus: row.deviceStatus ?? "—",
+                  actions: (() => {
+                    const actions = row.deviceId
+                      ? rowActionsByDevice.get(row.deviceId) ?? []
+                      : [];
+                    if (actions.length === 0) return "—";
+                    return html`
+                      <span class="row-actions">
+                        ${actions.map((action) => {
+                          const hold = this._holdStates[action.entity_id] ?? {
+                            progress: 0,
+                            completed: false,
+                          };
+                          return html`
+                            <button
+                              class="icon-toggle row-action ${hold.progress > 0
+                                ? "holding"
+                                : ""} ${hold.completed ? "completed" : ""}"
+                              title=${action.requiresHold
+                                ? t("actions.holdWithLabel", {
+                                  seconds: holdSeconds,
+                                  label: action.label,
+                                })
+                                : action.label}
+                              style=${`--hold-progress:${hold.progress}`}
+                              ?disabled=${!action.available}
+                              @pointerdown=${(ev: PointerEvent) => this._startHold(ev, action)}
+                              @pointerup=${(ev: PointerEvent) => this._cancelHold(ev, action)}
+                              @pointerleave=${(ev: PointerEvent) => this._cancelHold(ev, action)}
+                              @pointercancel=${(ev: PointerEvent) => this._cancelHold(ev, action)}
+                              @click=${(ev: MouseEvent) => {
+                                if (ev.shiftKey) {
+                                  this._showMoreInfo(action.entity_id);
+                                  return;
+                                }
+                                if (action.requiresHold) {
+                                  ev.preventDefault();
+                                  return;
+                                }
+                                this._invokeAction(action);
+                              }}
+                            >
+                              <ha-icon .icon=${action.icon}></ha-icon>
+                              ${action.band
+                                ? html`<span class="band-badge">${action.band === "2g" ? "2.4" : action.band.replace("g", "")}</span>`
+                                : ""}
+                            </button>
+                          `;
+                        })}
+                      </span>
+                    `;
+                  })(),
                   signal: isOffline || row.connectionType === "wired"
                     ? "—"
                     : html`
@@ -2287,11 +2826,37 @@ export class TplinkRouterCard extends LitElement {
                                       ${row.signal}
                                     </span>
                                   `,
+                  snr: isOffline || row.connectionType === "wired" ? "—" : row.snr,
+                  powerSave: row.powerSave,
                 };
                 return html`
                               <tr>
                                 ${displayColumns.map(
-                  (col) => html`<td>${cells[col.key]}</td>`,
+                  (col) => {
+                    const shiftEntityClickable = this._isShiftEntityCellClickable(
+                      entryDomain,
+                      col.key,
+                      row,
+                      entryId,
+                    );
+                    const tdClasses = [
+                      col.key === "actions" ? "actions-cell" : "",
+                      shiftEntityClickable ? "shift-entity-clickable" : "",
+                    ]
+                      .filter((item) => item.length > 0)
+                      .join(" ");
+                    return html`
+                      <td
+                        class=${tdClasses}
+                        @click=${(ev: MouseEvent) =>
+                          shiftEntityClickable
+                            ? this._handleShiftEntityCellClick(ev, row, col.key, entryId)
+                            : undefined}
+                      >
+                        ${cells[col.key]}
+                      </td>
+                    `;
+                  },
                 )}
                               </tr>
                             `;
@@ -2397,6 +2962,7 @@ export class TplinkRouterCard extends LitElement {
         },
         { name: "txrx_color", selector: { boolean: {} } },
         { name: "updown_color", selector: { boolean: {} } },
+        { name: "shift_click_underline", selector: { boolean: {} } },
         { name: "hide_header", selector: { boolean: {} } },
         { name: "hide_filter_section", selector: { boolean: {} } },
         {
@@ -2472,6 +3038,8 @@ export class TplinkRouterCard extends LitElement {
             return t("editor.txrxColor");
           case "updown_color":
             return t("editor.updownColor");
+          case "shift_click_underline":
+            return t("editor.shiftClickUnderline");
           case "hide_header":
             return t("editor.hideHeader");
           case "hide_filter_section":
@@ -2501,6 +3069,9 @@ export class TplinkRouterCard extends LitElement {
         }
         if (schema.name === "updown_color") {
           return t("editor.updownColorHelp");
+        }
+        if (schema.name === "shift_click_underline") {
+          return t("editor.shiftClickUnderlineHelp");
         }
         if (schema.name === "hide_header") {
           return t("editor.hideHeaderHelp");

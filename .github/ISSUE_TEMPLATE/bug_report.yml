@@ -49,17 +49,28 @@ body:
       value: |
         ## Diagnostics export (recommended)
 
-        If you can, please include diagnostics JSON from the card:
+        Please include diagnostics JSON from the card when possible:
         1. Open the card
-        2. Double click the card title
-        3. Click the diagnostics download icon
-        4. Attach the downloaded JSON to this issue (drag and drop)
+        2. Double click the card title (this reveals a hidden diagnostics button)
+        3. Click the small download icon
+        4. Attach the downloaded JSON file to this issue (drag and drop)
+  - type: dropdown
+    id: diagnostics-status
+    attributes:
+      label: Diagnostics attachment status
+      description: Optional, but strongly recommended for faster troubleshooting
+      options:
+        - Attached
+        - Not attached yet
+        - Could not generate
   - type: textarea
     id: diagnostics
     attributes:
       label: Diagnostics JSON
-      description: Attach the JSON file to this issue and also add a short note here
-      placeholder: "Attached file: tplink-router-card-export-....json"
+      description: If attached, include the filename and any notes. If not attached, briefly explain why.
+      placeholder: |
+        Attached file: tplink-router-card-export-....json
+        Notes: ...
   - type: textarea
     id: steps
     attributes:

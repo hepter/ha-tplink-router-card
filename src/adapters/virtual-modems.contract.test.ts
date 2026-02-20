@@ -117,5 +117,26 @@ describe("virtual modem fixtures", () => {
     expect(be230VsOmada).toEqual([]);
     expect(decoVsOmada).toEqual([]);
   });
-});
 
+  it("keeps Omada virtual fixture large enough to reproduce dropdown scale issues", () => {
+    const omada = loadJson<{
+      controller: JsonObject;
+      devices: Array<JsonObject>;
+      clients: Array<JsonObject>;
+      known_clients: Array<JsonObject>;
+    }>("virtual_modems/data/omada_controller.json");
+
+    expect(String(omada.controller.name ?? "")).toContain("Virtual Omada Controller");
+    expect(omada.devices.length).toBeGreaterThanOrEqual(4);
+    expect(omada.clients.length).toBeGreaterThanOrEqual(60);
+    expect(omada.known_clients.length).toBe(omada.clients.length);
+
+    const wireless = omada.clients.filter((item) => item.wireless === true);
+    const wired = omada.clients.filter((item) => item.wireless === false);
+    const guest = omada.clients.filter((item) => item.guest === true);
+
+    expect(wireless.length).toBeGreaterThan(0);
+    expect(wired.length).toBeGreaterThan(0);
+    expect(guest.length).toBeGreaterThan(0);
+  });
+});

@@ -18,6 +18,7 @@ export type LinkRateUnitHint = "auto" | "kbps";
 
 export interface MappedTrackerRow {
   entity_id: string;
+  deviceId?: string;
   name: string;
   nameRaw: string;
   macNormalized: string;
@@ -45,11 +46,19 @@ export interface MappedTrackerRow {
   rxRateValue: number | null;
   onlineTime: string;
   onlineTimeValue: number | null;
+  downloaded: string;
+  downloadedValue: number | null;
+  uploaded: string;
+  uploadedValue: number | null;
   trafficUsage: string;
   trafficUsageValue: number | null;
   signal: string;
   signalValue: number | null;
   signalColor: string;
+  snr: string;
+  snrValue: number | null;
+  powerSave: string;
+  powerSaveValue: number | null;
   deviceType?: string;
   deviceModel?: string;
   deviceFirmware?: string;
@@ -76,7 +85,20 @@ export const normalizeBand = (value: unknown): BandType => {
 
 export const normalizeConnection = (value: unknown): ConnectionType => {
   if (value === null || value === undefined) return "unknown";
-  const text = String(value).toLowerCase();
+  const text = String(value).trim().toLowerCase();
+  if (
+    text.length === 0 ||
+    text === "—" ||
+    text === "-" ||
+    text === "unknown" ||
+    text === "unavailable" ||
+    text === "none" ||
+    text === "null" ||
+    text === "n/a" ||
+    text === "na"
+  ) {
+    return "unknown";
+  }
   if (text.includes("guest")) return "guest";
   if (text.includes("iot")) return "iot";
   if (text.includes("wired") || text.includes("lan") || text.includes("ethernet")) return "wired";
@@ -340,7 +362,6 @@ export const mapTrackerStateToRow = (
 ): MappedTrackerRow => {
   const attrs = state.attributes as Record<string, unknown>;
   const nameRaw = safeString(attrs.friendly_name ?? state.entity_id);
-  const isOnline = STATUS_ONLINE.has(state.state);
   const rawInterface = attrs.interface ?? attrs.client_type ?? attrs.clientType;
   const rawWireType = attrs.wire_type ?? attrs.wireType;
   const normalizedInterface = normalizeInterfaceLabel(rawInterface);
@@ -356,6 +377,7 @@ export const mapTrackerStateToRow = (
     attrs.band ?? attrs.bandwidth ?? attrs.frequency ?? attrs.wifi_band ?? inferredBandFromConnection,
   );
   const bandType = normalizeBand(band);
+  const connectionType = normalizeConnection(connection);
   const ip = safeString(attrs.ip ?? attrs.ip_address ?? attrs.ipaddr ?? "—");
   const mac = safeString(attrs.mac ?? attrs.mac_address ?? attrs.macaddr ?? "—");
   const hostname = safeString(
@@ -393,6 +415,11 @@ export const mapTrackerStateToRow = (
     attrs.sw_version ?? attrs.firmware ?? attrs.firmware_version ?? "—",
   );
   const deviceStatus = mapDeviceStatus(attrs);
+  const hasInvalidOnlinePresence =
+    (ip === "0.0.0.0" || ip === "—") &&
+    connectionType === "unknown" &&
+    bandType === "unknown";
+  const isOnline = STATUS_ONLINE.has(state.state) && !hasInvalidOnlinePresence;
 
   return {
     entity_id: state.entity_id,
@@ -403,7 +430,7 @@ export const mapTrackerStateToRow = (
     statusValue: isOnline ? 1 : 0,
     statusColor: isOnline ? "#3aa45b" : "#9aa0a6",
     connection,
-    connectionType: normalizeConnection(connection),
+    connectionType,
     band,
     bandType,
     ip,
@@ -423,11 +450,19 @@ export const mapTrackerStateToRow = (
     rxRateValue,
     onlineTime: formatDuration(onlineTimeValue),
     onlineTimeValue,
+    downloaded: formatBytes(trafficDown),
+    downloadedValue: trafficDown,
+    uploaded: formatBytes(trafficUp),
+    uploadedValue: trafficUp,
     trafficUsage: formatBytes(trafficUsageValue),
     trafficUsageValue,
     signal: signalValue !== null ? `${signalValue} dBm` : "—",
     signalValue,
     signalColor: signalColor(signalValue),
+    snr: "—",
+    snrValue: null,
+    powerSave: "—",
+    powerSaveValue: null,
     deviceType,
     deviceModel,
     deviceFirmware,

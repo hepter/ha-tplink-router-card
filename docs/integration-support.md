@@ -23,11 +23,16 @@
 - Notes: current upstream integration does not expose packet counters, TX/RX link rates, online duration, traffic usage, or generic RSSI per client.
 
 ### omada / tplink_omada
-- Support level: **Partial**
+- Support level: **High**
 - Adapter: `src/adapters/omada.ts`
-- Action matching: reconnect + WLAN optimization (if entities are exposed)
-- Coverage focus: client list + client activity sensors where available
-- Notes: upstream Omada trackers generally do not expose per-client TX/RX link-rate attributes. The card maps TX/RX only when explicit link-rate attributes exist.
+- Action matching:
+  - Header-level infrastructure actions (for selected target device)
+  - Row-level `actions` column for per-device controls
+- Coverage focus:
+  - device-based rows
+  - controller client aggregation
+  - Omada metrics and metadata columns
+- Notes: per-client TX/RX link-rate values are shown only when explicit link-rate entities are exposed by the integration.
 
 ## Column strategy
 

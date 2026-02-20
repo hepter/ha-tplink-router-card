@@ -16,6 +16,10 @@ A Lovelace card for Home Assistant focused on TP-Link client monitoring and quic
 - Multi-sort (Shift + click), with empty values always kept at the bottom.
 - Strong formatting for traffic, link rates, duration, and signal quality.
 - Router header with local URL, public IP, CPU/MEM summary, and quick actions.
+- Name-cell navigation:
+  - `tplink_router` / `tplink_deco`: name click opens entity more-info.
+  - `omada` / `tplink_omada`: name click opens device page.
+  - `tplink_router`: inline device shortcut icon in Name column.
 - Hold-to-confirm safety for destructive actions (1 second).
 - Built-in diagnostics export (redacted only).
 - i18n support with automatic Home Assistant locale selection.
@@ -55,8 +59,8 @@ Headless + no filter layout: both header and filter row are hidden for a compact
 Support level summary:
 - `tplink_router`: full support
 - `tplink_deco`: high support
-- `omada`: partial support
-- `tplink_omada`: partial support
+- `omada`: high support
+- `tplink_omada`: high support
 
 Detailed matrix: `docs/integration-support.md`
 
@@ -71,10 +75,13 @@ Detailed matrix: `docs/integration-support.md`
   - Action icons are shown only if `switch.*` or `button.*` entities are available in the selected entry.
 
 - Omada (`omada` / `tplink_omada`):
-  - Client listing support.
-  - Partial action support when matching entities exist:
-    - Reconnect
-    - Start WLAN Optimization
+  - Device-based row mapping with controller client data.
+  - Per-row actions (`actions` column) from matched `switch.*` / `button.*` entities.
+  - Header action target selector for infrastructure devices.
+  - Metric/entity bridge for Omada-only fields with Shift+click cell info.
+  - Extra Omada columns:
+    - `downloaded`, `uploaded`, `snr`, `powerSave`
+    - `deviceType`, `deviceModel`, `deviceFirmware`, `deviceStatus`
 
 Notes:
 - Available actions and sensors depend on model, firmware, and integration-exposed entities.
@@ -130,6 +137,7 @@ entry_id: <config_entry_id>
 speed_unit: MBps
 txrx_color: true
 updown_color: true
+shift_click_underline: true
 hide_header: false
 hide_filter_section: false
 default_filters:
@@ -145,15 +153,41 @@ columns:
   - ip
   - mac
   - hostname
-  - packetsSent
-  - packetsReceived
   - down
   - up
-  - tx
-  - rx
-  - online
-  - traffic
-  - signal
+```
+
+Cross-integration safe baseline `columns`:
+```yaml
+columns:
+  - status
+  - connection
+  - band
+  - ip
+  - mac
+  - hostname
+  - down
+  - up
+```
+
+Integration-specific extra columns:
+```yaml
+# tplink_router
+- packetsSent
+- packetsReceived
+
+# omada / tplink_omada
+- downloaded
+- uploaded
+- snr
+- powerSave
+- actions
+
+# tplink_deco / omada / tplink_omada metadata
+- deviceType
+- deviceModel
+- deviceFirmware
+- deviceStatus
 ```
 
 ### Recommended column presets by integration
@@ -196,7 +230,6 @@ columns:
   - hostname
   - down
   - up
-  - online
   - deviceType
   - deviceModel
   - deviceFirmware
@@ -217,12 +250,17 @@ columns:
   - down
   - up
   - online
+  - downloaded
+  - uploaded
   - traffic
   - signal
+  - snr
+  - powerSave
   - deviceType
   - deviceModel
   - deviceFirmware
   - deviceStatus
+  - actions
 ```
 
 Options:
@@ -231,6 +269,7 @@ Options:
 - `speed_unit`: `MBps` (default) or `Mbps` for Up/Down columns.
 - `txrx_color`: Enable colorized TX/RX speed levels.
 - `updown_color`: Enable colorized upload/download speeds.
+- `shift_click_underline`: Show Shift+click underline hints for entity-clickable cells (currently Omada-only visual behavior).
 - `hide_header`: Hide the header area.
 - `hide_filter_section`: Hide the filter section.
 - `default_filters`: Optional fixed default filters applied on every page load.

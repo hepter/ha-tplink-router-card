@@ -12,7 +12,11 @@ import {
   toNumber,
   type MappedTrackerRow,
 } from "./tplink";
-import type { EntityRegistryEntry, HassEntity } from "../core/types";
+import type {
+  DeviceRegistryEntry,
+  EntityRegistryEntry,
+  HassEntity,
+} from "../core/types";
 
 const STATUS_ONLINE = new Set(["home", "on", "connected"]);
 
@@ -25,6 +29,7 @@ type OmadaClientMetrics = {
   rxActivityMBps: number | null;
   txActivityMBps: number | null;
   rssi: number | null;
+  snr: number | null;
   uptimeSeconds: number | null;
 };
 
@@ -34,6 +39,7 @@ const defaultMetrics = (): OmadaClientMetrics => ({
   rxActivityMBps: null,
   txActivityMBps: null,
   rssi: null,
+  snr: null,
   uptimeSeconds: null,
 });
 
@@ -42,7 +48,7 @@ const isDeviceTrackerEntity = (state: HassEntity) =>
 
 const toText = (value: unknown) => String(value ?? "").trim();
 
-const isOmadaTracker = (state: HassEntity) => {
+const isLikelyOmadaTrackerByAttrs = (state: HassEntity) => {
   if (!isDeviceTrackerEntity(state)) return false;
   const attrs = state.attributes as Record<string, unknown>;
   const sourceType = String(attrs.source_type ?? "").toLowerCase();
@@ -158,7 +164,10 @@ const resolveConnection = (
   if (attrs.ip !== undefined || attrs.ip_address !== undefined || attrs.mac !== undefined) {
     return { label: "Wired", type: "wired" };
   }
-  return { label: safeString(attrs.connection ?? attrs.type ?? "—"), type: "unknown" };
+  return {
+    label: safeString(attrs.connection ?? attrs.type ?? "—"),
+    type: "unknown",
+  };
 };
 
 const parseUptimeSeconds = (value: unknown): number | null => {
@@ -239,6 +248,10 @@ const mapSensorMetric = (state: HassEntity, target: OmadaClientMetrics) => {
     target.txActivityMBps = toNumber(state.state);
     return;
   }
+  if (text.includes("snr")) {
+    target.snr = toNumber(state.state);
+    return;
+  }
   if (text.includes("rssi") || text.includes("signal")) {
     target.rssi = toNumber(state.state);
     return;
@@ -246,6 +259,345 @@ const mapSensorMetric = (state: HassEntity, target: OmadaClientMetrics) => {
   if (text.includes("uptime") || text.includes("duration") || text.includes("connected")) {
     target.uptimeSeconds = parseUptimeSeconds(state.state);
   }
+};
+
+const normalizeDeviceType = (value: unknown) => {
+  const text = toText(value).toLowerCase();
+  if (!text) return "—";
+  if (text === "ap") return "Access Point";
+  if (text === "gateway") return "Gateway";
+  if (text === "switch") return "Switch";
+  return safeString(value);
+};
+
+const inferDeviceTypeFromModel = (model?: string) => {
+  if (!model) return undefined;
+  const text = model.toLowerCase();
+  if (text.startsWith("eap")) return "Access Point";
+  if (text.startsWith("er")) return "Gateway";
+  if (text.startsWith("sg") || text.startsWith("tl-sg")) return "Switch";
+  return undefined;
+};
+
+const enrichRowWithDevice = (
+  row: MappedTrackerRow,
+  device: DeviceRegistryEntry | undefined,
+): MappedTrackerRow => {
+  if (!device) return row;
+  const macFromConnections = device.connections?.find((item) => {
+    const kind = String(item[0] ?? "").toLowerCase();
+    return kind.includes("mac");
+  })?.[1];
+
+  return {
+    ...row,
+    name: row.name === "—" ? safeString(device.name_by_user ?? device.name ?? "—") : row.name,
+    nameRaw:
+      row.nameRaw === "—"
+        ? safeString(device.name_by_user ?? device.name ?? "—")
+        : row.nameRaw,
+    mac:
+      row.mac === "—"
+        ? safeString(macFromConnections ?? row.mac)
+        : row.mac,
+    macNormalized:
+      row.macNormalized.length === 0 && macFromConnections
+        ? normalizeMac(macFromConnections)
+        : row.macNormalized,
+    deviceType:
+      row.deviceType && row.deviceType !== "—"
+        ? row.deviceType
+        : inferDeviceTypeFromModel(device.model) ?? row.deviceType,
+    deviceModel:
+      row.deviceModel && row.deviceModel !== "—"
+        ? row.deviceModel
+        : safeString(device.model ?? row.deviceModel ?? "—"),
+    deviceFirmware:
+      row.deviceFirmware && row.deviceFirmware !== "—"
+        ? row.deviceFirmware
+        : safeString(device.sw_version ?? row.deviceFirmware ?? "—"),
+  };
+};
+
+const pickStatusFromStates = (states: HassEntity[]): { isOnline: boolean; raw: string } => {
+  for (const state of states) {
+    const normalized = String(state.state ?? "").toLowerCase();
+    if (STATUS_ONLINE.has(normalized)) return { isOnline: true, raw: state.state };
+    if (normalized === "off" || normalized === "not_home") {
+      return { isOnline: false, raw: state.state };
+    }
+  }
+
+  const switchState = states.find((state) => state.entity_id.startsWith("switch."));
+  if (switchState) {
+    const isOnline = String(switchState.state).toLowerCase() !== "off";
+    return { isOnline, raw: switchState.state };
+  }
+
+  return { isOnline: false, raw: "unknown" };
+};
+
+const pickPrimaryEntity = (states: HassEntity[]): HassEntity | undefined => {
+  const priority = [
+    (state: HassEntity) => state.entity_id.startsWith("device_tracker."),
+    (state: HassEntity) => state.entity_id.startsWith("switch."),
+    (state: HassEntity) => state.entity_id.startsWith("button."),
+    (state: HassEntity) => state.entity_id.startsWith("sensor."),
+  ];
+  for (const selector of priority) {
+    const match = states.find(selector);
+    if (match) return match;
+  }
+  return states[0];
+};
+
+const shouldSkipDeviceOnlyRow = (states: HassEntity[]): boolean => {
+  if (states.some((state) => state.entity_id.startsWith("device_tracker."))) return false;
+  // Skip only update-only groups.
+  return states.every((state) => state.entity_id.startsWith("update."));
+};
+
+const hasWirelessDeviceSignals = (states: HassEntity[]) =>
+  states.some((state) => {
+    const id = state.entity_id.toLowerCase();
+    const attrs = state.attributes as Record<string, unknown>;
+    const friendly = String(attrs.friendly_name ?? "").toLowerCase();
+    const text = `${id} ${friendly}`;
+    return (
+      text.includes("reconnect") ||
+      text.includes("rssi") ||
+      text.includes(" snr") ||
+      text.includes(" 5g") ||
+      text.includes(" 6g") ||
+      text.includes(" 2.4g") ||
+      attrs.wireless === true ||
+      String(attrs.wireless).toLowerCase() === "true"
+    );
+  });
+
+const findNumberFromStates = (states: HassEntity[], keywords: string[]): number | null => {
+  for (const state of states) {
+    const id = state.entity_id.toLowerCase();
+    const attrs = state.attributes as Record<string, unknown>;
+    const friendly = String(attrs.friendly_name ?? "").toLowerCase();
+    const text = `${id} ${friendly}`;
+    if (!keywords.some((keyword) => text.includes(keyword))) continue;
+    const value = toNumber(state.state);
+    if (value !== null) return value;
+  }
+  return null;
+};
+
+const findPowerSaveFromStates = (states: HassEntity[]): { text: string; value: number | null } => {
+  for (const state of states) {
+    const id = state.entity_id.toLowerCase();
+    if (!id.includes("power_save")) continue;
+    const normalized = String(state.state ?? "").toLowerCase();
+    if (normalized === "on") return { text: "On", value: 1 };
+    if (normalized === "off") return { text: "Off", value: 0 };
+    return { text: safeString(state.state), value: null };
+  }
+  return { text: "—", value: null };
+};
+
+type OmadaClientLookup = {
+  ip?: string;
+  name?: string;
+  mac?: string;
+};
+
+const normalizeNameKey = (value: string) => value.trim().toLowerCase();
+
+const buildControllerClientLookup = (states: HassEntity[]) => {
+  const byMac = new Map<string, OmadaClientLookup>();
+  const byName = new Map<string, OmadaClientLookup>();
+
+  for (const state of states) {
+    if (!state.entity_id.startsWith("sensor.")) continue;
+    const attrs = state.attributes as Record<string, unknown>;
+    const clients = attrs.clients;
+    if (!Array.isArray(clients)) continue;
+
+    for (const item of clients) {
+      if (!item || typeof item !== "object") continue;
+      const client = item as Record<string, unknown>;
+      const macText = safeString(client.mac);
+      const normalizedMac = normalizeMac(macText);
+      const name = safeString(client.name);
+      const ip = safeString(client.ip);
+      const value: OmadaClientLookup = {
+        ip: ip === "—" ? undefined : ip,
+        name: name === "—" ? undefined : name,
+        mac: macText === "—" ? undefined : macText,
+      };
+      if (normalizedMac.length > 0) {
+        byMac.set(normalizedMac, value);
+      }
+      if (name !== "—") {
+        byName.set(normalizeNameKey(name), value);
+      }
+    }
+  }
+
+  return { byMac, byName };
+};
+
+const enrichRowWithControllerClientLookup = (
+  row: MappedTrackerRow,
+  lookup: ReturnType<typeof buildControllerClientLookup>,
+) => {
+  const matchByMac =
+    row.macNormalized.length > 0 ? lookup.byMac.get(row.macNormalized) : undefined;
+  const matchByName = lookup.byName.get(normalizeNameKey(row.nameRaw));
+  const match = matchByMac ?? matchByName;
+  if (!match) return row;
+
+  const nextMac = row.mac === "—" ? safeString(match.mac ?? "—") : row.mac;
+  const nextMacNormalized = normalizeMac(nextMac);
+  return {
+    ...row,
+    ip: row.ip === "—" ? safeString(match.ip ?? row.ip) : row.ip,
+    name: row.name === "—" ? safeString(match.name ?? row.name) : row.name,
+    nameRaw: row.nameRaw === "—" ? safeString(match.name ?? row.nameRaw) : row.nameRaw,
+    hostname:
+      row.hostname === "—" ? safeString(match.name ?? row.hostname) : row.hostname,
+    mac: nextMac,
+    macNormalized: nextMacNormalized.length > 0 ? nextMacNormalized : row.macNormalized,
+  };
+};
+
+const applyOmadaDeviceContext = (
+  row: MappedTrackerRow,
+  states: HassEntity[],
+): MappedTrackerRow => {
+  const hasWireless = hasWirelessDeviceSignals(states);
+  const inferredSnr = row.snrValue ?? findNumberFromStates(states, ["snr"]);
+  const inferredSignal = row.signalValue ?? findNumberFromStates(states, ["rssi", " signal"]);
+  const powerSave = findPowerSaveFromStates(states);
+
+  const nextConnectionType =
+    row.connectionType === "wired" && hasWireless ? "wifi" : row.connectionType;
+  const nextConnection =
+    row.connectionType === "wired" && hasWireless ? "WiFi" : row.connection;
+
+  return {
+    ...row,
+    connectionType: nextConnectionType,
+    connection: nextConnection,
+    signal: inferredSignal !== null ? `${inferredSignal} dBm` : row.signal,
+    signalValue: inferredSignal,
+    signalColor: signalColor(inferredSignal),
+    snr: inferredSnr !== null ? `${inferredSnr} dB` : row.snr,
+    snrValue: inferredSnr,
+    powerSave: powerSave.text,
+    powerSaveValue: powerSave.value,
+  };
+};
+
+const buildRowFromDeviceOnlyStates = (
+  deviceId: string,
+  states: HassEntity[],
+  metrics: OmadaClientMetrics | undefined,
+  speedUnit: "MBps" | "Mbps",
+  device: DeviceRegistryEntry | undefined,
+): MappedTrackerRow | null => {
+  if (states.length === 0 || shouldSkipDeviceOnlyRow(states)) return null;
+
+  const primary = pickPrimaryEntity(states);
+  if (!primary) return null;
+
+  const attrs = primary.attributes as Record<string, unknown>;
+  const status = pickStatusFromStates(states);
+  const normalizedType = normalizeDeviceType(attrs.type ?? inferDeviceTypeFromModel(device?.model));
+  const connectionLabel =
+    normalizedType === "Gateway" || normalizedType === "Switch" || normalizedType === "Access Point"
+      ? normalizedType
+      : "Wired";
+
+  const downloadedMB = metrics?.downloadedMB ?? null;
+  const uploadedMB = metrics?.uploadedMB ?? null;
+  const downloadedBytes = downloadedMB !== null ? downloadedMB * 1024 * 1024 : null;
+  const uploadedBytes = uploadedMB !== null ? uploadedMB * 1024 * 1024 : null;
+  const trafficUsageValue =
+    downloadedBytes !== null || uploadedBytes !== null
+      ? (downloadedBytes ?? 0) + (uploadedBytes ?? 0)
+      : null;
+
+  const row: MappedTrackerRow = {
+    entity_id: primary.entity_id,
+    deviceId,
+    name: safeString(device?.name_by_user ?? device?.name ?? primary.attributes.friendly_name ?? primary.entity_id),
+    nameRaw: safeString(device?.name_by_user ?? device?.name ?? primary.attributes.friendly_name ?? primary.entity_id),
+    macNormalized: normalizeMac(
+      safeString(
+        attrs.mac ??
+          attrs.mac_address ??
+          device?.connections?.find((entry) => String(entry[0]).toLowerCase().includes("mac"))?.[1] ??
+          "",
+      ),
+    ),
+    isOnline: status.isOnline,
+    statusValue: status.isOnline ? 1 : 0,
+    statusColor: status.isOnline ? "#3aa45b" : "#9aa0a6",
+    connection: connectionLabel,
+    connectionType: normalizedType === "—" ? "wired" : "unknown",
+    band: "—",
+    bandType: "unknown",
+    ip: safeString(attrs.ip ?? attrs.ip_address ?? "—"),
+    mac: safeString(
+      attrs.mac ??
+        attrs.mac_address ??
+        device?.connections?.find((entry) => String(entry[0]).toLowerCase().includes("mac"))?.[1] ??
+        "—",
+    ),
+    hostname: safeString(attrs.host_name ?? attrs.hostname ?? attrs.name ?? device?.name_by_user ?? device?.name ?? "—"),
+    packetsSent: "—",
+    packetsSentValue: null,
+    packetsReceived: "—",
+    packetsReceivedValue: null,
+    upSpeed: formatTransferSpeed(metrics?.txActivityMBps ?? null, speedUnit),
+    upSpeedValue:
+      metrics?.txActivityMBps !== null && metrics?.txActivityMBps !== undefined
+        ? metrics.txActivityMBps * 8
+        : null,
+    downSpeed: formatTransferSpeed(metrics?.rxActivityMBps ?? null, speedUnit),
+    downSpeedValue:
+      metrics?.rxActivityMBps !== null && metrics?.rxActivityMBps !== undefined
+        ? metrics.rxActivityMBps * 8
+        : null,
+    txRate: "—",
+    txRateValue: null,
+    rxRate: "—",
+    rxRateValue: null,
+    onlineTime: formatDuration(metrics?.uptimeSeconds ?? null),
+    onlineTimeValue: metrics?.uptimeSeconds ?? null,
+    downloaded: formatBytes(downloadedBytes),
+    downloadedValue: downloadedBytes,
+    uploaded: formatBytes(uploadedBytes),
+    uploadedValue: uploadedBytes,
+    trafficUsage: formatBytes(trafficUsageValue),
+    trafficUsageValue,
+    signal:
+      metrics?.rssi !== null && metrics?.rssi !== undefined
+        ? `${metrics.rssi} dBm`
+        : "—",
+    signalValue: metrics?.rssi ?? null,
+    signalColor: signalColor(metrics?.rssi ?? null),
+    snr:
+      metrics?.snr !== null && metrics?.snr !== undefined
+        ? `${metrics.snr} dB`
+        : "—",
+    snrValue: metrics?.snr ?? null,
+    powerSave: "—",
+    powerSaveValue: null,
+    deviceType: normalizedType,
+    deviceModel: safeString(device?.model ?? attrs.model ?? attrs.device_model ?? "—"),
+    deviceFirmware: safeString(device?.sw_version ?? attrs.firmware ?? attrs.firmware_version ?? "—"),
+    deviceStatus:
+      status.raw !== "unknown" ? safeString(status.raw) : safeString(attrs.status ?? "—"),
+  };
+
+  return enrichRowWithDevice(applyOmadaDeviceContext(row, states), device);
 };
 
 export const buildOmadaClientMetrics = (
@@ -275,47 +627,21 @@ export const selectOmadaTrackers = (
   entryId: string | undefined,
   registryFailed: boolean,
 ) => {
-  const allOmadaTrackers = Object.values(allStates).filter((state) => isOmadaTracker(state));
+  const fallbackTrackers = Object.values(allStates).filter((state) =>
+    isLikelyOmadaTrackerByAttrs(state),
+  );
 
-  if (!entryId) return allOmadaTrackers;
+  if (!entryId) return fallbackTrackers;
   if (!registryFailed && entityRegistry.length === 0) return [];
-  if (registryFailed || entityRegistry.length === 0) return allOmadaTrackers;
+  if (registryFailed || entityRegistry.length === 0) return fallbackTrackers;
 
-  const registryTrackersForEntry = entityRegistry
+  const selected = entityRegistry
     .filter((entry) => entry.config_entry_id === entryId)
-    .filter((entry) => entry.entity_id.startsWith("device_tracker."));
-
-  const selected = registryTrackersForEntry
+    .filter((entry) => entry.entity_id.startsWith("device_tracker."))
     .map((entry) => allStates[entry.entity_id])
-    .filter((state): state is HassEntity => state !== undefined)
-    .filter((state) => isDeviceTrackerEntity(state));
+    .filter((state): state is HassEntity => state !== undefined);
 
   if (selected.length > 0) return selected;
-
-  const byEntityId = new Map(entityRegistry.map((entry) => [entry.entity_id, entry.config_entry_id]));
-  const matchedByRegistry = allOmadaTrackers.filter(
-    (state) => byEntityId.get(state.entity_id) === entryId,
-  );
-  if (matchedByRegistry.length > 0) return matchedByRegistry;
-
-  const entryDeviceIds = new Set(
-    entityRegistry
-      .filter((entry) => entry.config_entry_id === entryId && entry.device_id)
-      .map((entry) => entry.device_id as string),
-  );
-  if (entryDeviceIds.size > 0) {
-    const trackerDeviceByEntity = new Map(
-      entityRegistry
-        .filter((entry) => entry.entity_id.startsWith("device_tracker.") && entry.device_id)
-        .map((entry) => [entry.entity_id, entry.device_id as string] as const),
-    );
-    const trackerByDevice = allOmadaTrackers.filter((state) => {
-      const deviceId = trackerDeviceByEntity.get(state.entity_id);
-      return deviceId ? entryDeviceIds.has(deviceId) : false;
-    });
-    if (trackerByDevice.length > 0) return trackerByDevice;
-  }
-
   return [];
 };
 
@@ -369,14 +695,16 @@ export const mapOmadaStateToRow = (
 
   const downloadedMB = metrics?.downloadedMB ?? null;
   const uploadedMB = metrics?.uploadedMB ?? null;
+  const downloadedBytes = downloadedMB !== null ? downloadedMB * 1024 * 1024 : null;
+  const uploadedBytes = uploadedMB !== null ? uploadedMB * 1024 * 1024 : null;
   const trafficDownBytes = toNumber(attrs.traffic_down ?? attrs.trafficDown);
   const trafficUpBytes = toNumber(attrs.traffic_up ?? attrs.trafficUp);
   const fallbackTraffic = toNumber(attrs.traffic_usage);
-  const totalTrafficMB =
-    downloadedMB !== null || uploadedMB !== null ? (downloadedMB ?? 0) + (uploadedMB ?? 0) : null;
+  const downloadedValue = downloadedBytes ?? trafficDownBytes;
+  const uploadedValue = uploadedBytes ?? trafficUpBytes;
   const trafficUsageValue =
-    totalTrafficMB !== null
-      ? totalTrafficMB * 1024 * 1024
+    downloadedBytes !== null || uploadedBytes !== null
+      ? (downloadedBytes ?? 0) + (uploadedBytes ?? 0)
       : trafficDownBytes !== null || trafficUpBytes !== null
         ? (trafficDownBytes ?? 0) + (trafficUpBytes ?? 0)
         : fallbackTraffic;
@@ -386,6 +714,16 @@ export const mapOmadaStateToRow = (
     parseUptimeSeconds(attrs.uptime ?? attrs.online_time ?? attrs.connected_since) ??
     null;
   const signalValue = toNumber(attrs.rssi ?? attrs.signal) ?? metrics?.rssi ?? null;
+  const snrValue = toNumber(attrs.snr) ?? metrics?.snr ?? null;
+  const powerSaveRaw = attrs.power_save ?? attrs.powerSave;
+  const powerSaveValue =
+    String(powerSaveRaw).toLowerCase() === "on" || powerSaveRaw === true
+      ? 1
+      : String(powerSaveRaw).toLowerCase() === "off" || powerSaveRaw === false
+        ? 0
+        : null;
+  const powerSave =
+    powerSaveValue === 1 ? "On" : powerSaveValue === 0 ? "Off" : "—";
   const deviceTypeRaw = toText(attrs.type);
   const deviceType =
     deviceTypeRaw.toLowerCase() === "ap"
@@ -428,14 +766,108 @@ export const mapOmadaStateToRow = (
     rxRateValue,
     onlineTime: formatDuration(onlineTimeValue),
     onlineTimeValue,
+    downloaded: formatBytes(downloadedValue),
+    downloadedValue,
+    uploaded: formatBytes(uploadedValue),
+    uploadedValue,
     trafficUsage: formatBytes(trafficUsageValue),
     trafficUsageValue,
     signal: signalValue !== null ? `${signalValue} dBm` : "—",
     signalValue,
     signalColor: signalColor(signalValue),
+    snr: snrValue !== null ? `${snrValue} dB` : "—",
+    snrValue,
+    powerSave,
+    powerSaveValue,
     deviceType,
     deviceModel,
     deviceFirmware,
     deviceStatus,
   };
+};
+
+export const buildOmadaRows = (
+  allStates: Record<string, HassEntity>,
+  entityRegistry: EntityRegistryEntry[],
+  deviceRegistry: DeviceRegistryEntry[],
+  entryId: string | undefined,
+  registryFailed: boolean,
+  speedUnit: "MBps" | "Mbps",
+): MappedTrackerRow[] => {
+  if (!entryId) return [];
+
+  if (!registryFailed && entityRegistry.length === 0) return [];
+  if (registryFailed || entityRegistry.length === 0) {
+    return selectOmadaTrackers(allStates, entityRegistry, entryId, registryFailed).map((tracker) =>
+      mapOmadaStateToRow(tracker, speedUnit),
+    );
+  }
+
+  const entryEntities = entityRegistry.filter((entry) => entry.config_entry_id === entryId);
+  if (entryEntities.length === 0) return [];
+
+  const byGroupKey = new Map<string, { deviceId?: string; entries: EntityRegistryEntry[] }>();
+  for (const entry of entryEntities) {
+    const key = entry.device_id ? `device:${entry.device_id}` : `entity:${entry.entity_id}`;
+    const group = byGroupKey.get(key) ?? { deviceId: entry.device_id, entries: [] };
+    group.entries.push(entry);
+    byGroupKey.set(key, group);
+  }
+
+  if (byGroupKey.size === 0) return [];
+
+  const metricsByDevice = buildOmadaClientMetrics(allStates, entityRegistry, entryId);
+  const devicesById = new Map(deviceRegistry.map((device) => [device.id, device] as const));
+  const controllerClientLookup = buildControllerClientLookup(
+    entryEntities
+      .map((entry) => allStates[entry.entity_id])
+      .filter((state): state is HassEntity => state !== undefined),
+  );
+  const rows: MappedTrackerRow[] = [];
+
+  for (const group of byGroupKey.values()) {
+    const { deviceId, entries } = group;
+    const states = entries
+      .map((entry) => allStates[entry.entity_id])
+      .filter((state): state is HassEntity => state !== undefined);
+
+    if (states.length === 0) continue;
+
+    const tracker = states.find((state) => state.entity_id.startsWith("device_tracker."));
+    const metrics = deviceId ? metricsByDevice.get(deviceId) : undefined;
+    const device = deviceId ? devicesById.get(deviceId) : undefined;
+
+    if (tracker) {
+      const row = enrichRowWithControllerClientLookup(
+        applyOmadaDeviceContext(
+          {
+            ...mapOmadaStateToRow(tracker, speedUnit, metrics),
+            deviceId,
+          },
+          states,
+        ),
+        {
+          byMac: controllerClientLookup.byMac,
+          byName: controllerClientLookup.byName,
+        },
+      );
+      rows.push(enrichRowWithDevice(row, device));
+      continue;
+    }
+
+    const fallbackRow = buildRowFromDeviceOnlyStates(
+      deviceId ?? entries[0]?.entity_id,
+      states,
+      metrics,
+      speedUnit,
+      device,
+    );
+    if (fallbackRow) {
+      rows.push(
+        enrichRowWithControllerClientLookup(fallbackRow, controllerClientLookup),
+      );
+    }
+  }
+
+  return rows;
 };

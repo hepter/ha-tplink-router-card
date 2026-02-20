@@ -1,0 +1,96 @@
+{
+  "actionItems": [
+    {
+      "entity_id": "button.b_hyve_hose_tap_timer_reconnect",
+      "deviceId": "device-client-1",
+      "deviceName": "B-Hyve Hose Tap Timer",
+      "isGlobalCommon": false
+    },
+    {
+      "entity_id": "button.b_hyve_sprinkler_controller_reconnect",
+      "deviceId": "device-client-2",
+      "deviceName": "B-Hyve Sprinkler Controller",
+      "isGlobalCommon": false
+    },
+    {
+      "entity_id": "button.canon_printer_reconnect",
+      "deviceId": "device-client-3",
+      "deviceName": "Canon Printer",
+      "isGlobalCommon": false
+    },
+    {
+      "entity_id": "button.er707_m2_router_reboot",
+      "deviceId": "device-router",
+      "deviceName": "ER707-M2 Router",
+      "isGlobalCommon": false
+    },
+    {
+      "entity_id": "button.sg2008p_switch_reboot",
+      "deviceId": "device-switch",
+      "deviceName": "SG2008P Switch",
+      "isGlobalCommon": false
+    },
+    {
+      "entity_id": "button.eap_650_ap_1_reboot",
+      "deviceId": "device-ap1",
+      "deviceName": "EAP 650 Access Point 1",
+      "isGlobalCommon": false
+    },
+    {
+      "entity_id": "button.eap_650_ap_2_reboot",
+      "deviceId": "device-ap2",
+      "deviceName": "EAP 650 Access Point 2",
+      "isGlobalCommon": false
+    },
+    {
+      "entity_id": "button.omada_start_wlan_optimization",
+      "deviceId": "device-controller",
+      "deviceName": "Omada Controller_DB0E31: Dorchester",
+      "isGlobalCommon": true
+    },
+    {
+      "entity_id": "button.b_hyve_hose_tap_timer_reconnect_duplicate",
+      "deviceId": "device-client-1",
+      "deviceName": "B-Hyve Hose Tap Timer",
+      "isGlobalCommon": false
+    }
+  ],
+  "devices": [
+    {
+      "id": "device-client-1",
+      "name": "B-Hyve Hose Tap Timer",
+      "manufacturer": "B-Hyve"
+    },
+    {
+      "id": "device-client-2",
+      "name": "B-Hyve Sprinkler Controller",
+      "manufacturer": "B-Hyve"
+    },
+    {
+      "id": "device-client-3",
+      "name": "Canon Printer",
+      "manufacturer": "Canon"
+    },
+    {
+      "id": "device-router",
+      "name": "ER707-M2 Router",
+      "manufacturer": "TP-Link"
+    },
+    {
+      "id": "device-switch",
+      "name": "SG2008P Switch",
+      "manufacturer": "TP-Link"
+    },
+    {
+      "id": "device-ap1",
+      "name": "EAP 650 Access Point 1",
+      "manufacturer": "TP-Link"
+    },
+    {
+      "id": "device-ap2",
+      "name": "EAP 650 Access Point 2",
+      "manufacturer": "TP-Link"
+    }
+  ]
+}
+

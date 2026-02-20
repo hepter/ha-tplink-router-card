@@ -1,0 +1,275 @@
+{
+  "entryId": "omada-entry-1",
+  "states": {
+    "device_tracker.router_gateway": {
+      "entity_id": "device_tracker.router_gateway",
+      "state": "home",
+      "attributes": {
+        "friendly_name": "ER707-M2 Router",
+        "source_type": "router",
+        "type": "gateway",
+        "model": "ER707-M2",
+        "firmware": "1.2.0",
+        "status": "online"
+      }
+    },
+    "button.router_gateway_reboot": {
+      "entity_id": "button.router_gateway_reboot",
+      "state": "unknown",
+      "attributes": {
+        "friendly_name": "ER707-M2 Router Reboot",
+        "icon": "mdi:restart"
+      }
+    },
+    "device_tracker.client_wifi_1": {
+      "entity_id": "device_tracker.client_wifi_1",
+      "state": "home",
+      "attributes": {
+        "friendly_name": "Client WiFi 1",
+        "source_type": "router",
+        "mac": "02:11:22:33:44:31"
+      }
+    },
+    "button.client_wifi_1_reconnect": {
+      "entity_id": "button.client_wifi_1_reconnect",
+      "state": "unknown",
+      "attributes": {
+        "friendly_name": "Client WiFi 1 Reconnect",
+        "icon": "mdi:autorenew"
+      }
+    },
+    "sensor.client_wifi_1_downloaded": {
+      "entity_id": "sensor.client_wifi_1_downloaded",
+      "state": "100.0",
+      "attributes": {
+        "friendly_name": "Client WiFi 1 Downloaded"
+      }
+    },
+    "sensor.client_wifi_1_uploaded": {
+      "entity_id": "sensor.client_wifi_1_uploaded",
+      "state": "20.0",
+      "attributes": {
+        "friendly_name": "Client WiFi 1 Uploaded"
+      }
+    },
+    "sensor.client_wifi_1_rx_activity": {
+      "entity_id": "sensor.client_wifi_1_rx_activity",
+      "state": "1.25",
+      "attributes": {
+        "friendly_name": "Client WiFi 1 RX Activity"
+      }
+    },
+    "sensor.client_wifi_1_tx_activity": {
+      "entity_id": "sensor.client_wifi_1_tx_activity",
+      "state": "0.5",
+      "attributes": {
+        "friendly_name": "Client WiFi 1 TX Activity"
+      }
+    },
+    "sensor.client_wifi_1_rssi": {
+      "entity_id": "sensor.client_wifi_1_rssi",
+      "state": "-51",
+      "attributes": {
+        "friendly_name": "Client WiFi 1 RSSI"
+      }
+    },
+    "sensor.client_wifi_1_uptime": {
+      "entity_id": "sensor.client_wifi_1_uptime",
+      "state": "3600",
+      "attributes": {
+        "friendly_name": "Client WiFi 1 Uptime"
+      }
+    },
+    "switch.client_wifi_1": {
+      "entity_id": "switch.client_wifi_1",
+      "state": "on",
+      "attributes": {
+        "friendly_name": "Client WiFi 1"
+      }
+    },
+    "device_tracker.client_wired_1": {
+      "entity_id": "device_tracker.client_wired_1",
+      "state": "home",
+      "attributes": {
+        "friendly_name": "Client Wired 1",
+        "source_type": "router",
+        "ip": "10.50.0.41",
+        "mac": "02:11:22:33:44:41",
+        "wireless": false
+      }
+    },
+    "sensor.client_wired_1_downloaded": {
+      "entity_id": "sensor.client_wired_1_downloaded",
+      "state": "42.5",
+      "attributes": {
+        "friendly_name": "Client Wired 1 Downloaded"
+      }
+    },
+    "sensor.client_wired_1_uploaded": {
+      "entity_id": "sensor.client_wired_1_uploaded",
+      "state": "12.0",
+      "attributes": {
+        "friendly_name": "Client Wired 1 Uploaded"
+      }
+    },
+    "switch.client_wired_1": {
+      "entity_id": "switch.client_wired_1",
+      "state": "on",
+      "attributes": {
+        "friendly_name": "Client Wired 1"
+      }
+    },
+    "button.controller_start_wlan_optimization": {
+      "entity_id": "button.controller_start_wlan_optimization",
+      "state": "unknown",
+      "attributes": {
+        "friendly_name": "Controller Start WLAN Optimization"
+      }
+    },
+    "sensor.omada_controller_clients": {
+      "entity_id": "sensor.omada_controller_clients",
+      "state": "2",
+      "attributes": {
+        "friendly_name": "Omada Controller Clients",
+        "clients": [
+          {
+            "mac": "02:11:22:33:44:31",
+            "name": "Client WiFi 1",
+            "ip": "10.50.0.31"
+          },
+          {
+            "mac": "02:11:22:33:44:41",
+            "name": "Client Wired 1",
+            "ip": "10.50.0.41"
+          }
+        ]
+      }
+    }
+  },
+  "entityRegistry": [
+    {
+      "entity_id": "device_tracker.router_gateway",
+      "platform": "omada",
+      "config_entry_id": "omada-entry-1",
+      "device_id": "dev-router"
+    },
+    {
+      "entity_id": "button.router_gateway_reboot",
+      "platform": "omada",
+      "config_entry_id": "omada-entry-1",
+      "device_id": "dev-router"
+    },
+    {
+      "entity_id": "device_tracker.client_wifi_1",
+      "platform": "omada",
+      "config_entry_id": "omada-entry-1",
+      "device_id": "dev-client-wifi"
+    },
+    {
+      "entity_id": "button.client_wifi_1_reconnect",
+      "platform": "omada",
+      "config_entry_id": "omada-entry-1",
+      "device_id": "dev-client-wifi"
+    },
+    {
+      "entity_id": "sensor.client_wifi_1_downloaded",
+      "platform": "omada",
+      "config_entry_id": "omada-entry-1",
+      "device_id": "dev-client-wifi"
+    },
+    {
+      "entity_id": "sensor.client_wifi_1_uploaded",
+      "platform": "omada",
+      "config_entry_id": "omada-entry-1",
+      "device_id": "dev-client-wifi"
+    },
+    {
+      "entity_id": "sensor.client_wifi_1_rx_activity",
+      "platform": "omada",
+      "config_entry_id": "omada-entry-1",
+      "device_id": "dev-client-wifi"
+    },
+    {
+      "entity_id": "sensor.client_wifi_1_tx_activity",
+      "platform": "omada",
+      "config_entry_id": "omada-entry-1",
+      "device_id": "dev-client-wifi"
+    },
+    {
+      "entity_id": "sensor.client_wifi_1_rssi",
+      "platform": "omada",
+      "config_entry_id": "omada-entry-1",
+      "device_id": "dev-client-wifi"
+    },
+    {
+      "entity_id": "sensor.client_wifi_1_uptime",
+      "platform": "omada",
+      "config_entry_id": "omada-entry-1",
+      "device_id": "dev-client-wifi"
+    },
+    {
+      "entity_id": "switch.client_wifi_1",
+      "platform": "omada",
+      "config_entry_id": "omada-entry-1",
+      "device_id": "dev-client-wifi"
+    },
+    {
+      "entity_id": "device_tracker.client_wired_1",
+      "platform": "omada",
+      "config_entry_id": "omada-entry-1",
+      "device_id": "dev-client-wired"
+    },
+    {
+      "entity_id": "sensor.client_wired_1_downloaded",
+      "platform": "omada",
+      "config_entry_id": "omada-entry-1",
+      "device_id": "dev-client-wired"
+    },
+    {
+      "entity_id": "sensor.client_wired_1_uploaded",
+      "platform": "omada",
+      "config_entry_id": "omada-entry-1",
+      "device_id": "dev-client-wired"
+    },
+    {
+      "entity_id": "switch.client_wired_1",
+      "platform": "omada",
+      "config_entry_id": "omada-entry-1",
+      "device_id": "dev-client-wired"
+    },
+    {
+      "entity_id": "button.controller_start_wlan_optimization",
+      "platform": "omada",
+      "config_entry_id": "omada-entry-1",
+      "device_id": "dev-controller"
+    },
+    {
+      "entity_id": "sensor.omada_controller_clients",
+      "platform": "omada",
+      "config_entry_id": "omada-entry-1",
+      "device_id": "dev-controller"
+    }
+  ],
+  "deviceRegistry": [
+    {
+      "id": "dev-router",
+      "name": "ER707-M2 Router",
+      "model": "ER707-M2",
+      "sw_version": "1.2.0"
+    },
+    {
+      "id": "dev-client-wifi",
+      "name": "Client WiFi 1",
+      "model": "Client"
+    },
+    {
+      "id": "dev-client-wired",
+      "name": "Client Wired 1",
+      "model": "Client"
+    },
+    {
+      "id": "dev-controller",
+      "name": "Omada Controller"
+    }
+  ]
+}

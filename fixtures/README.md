@@ -11,6 +11,7 @@ Behavior-based contract fixtures used by adapter tests.
   - `diagnostic_export_minimal.json`
   - `client_link_rate_kbps.json`
   - `client_activity_mapping.json`
+  - `action_device_dropdown_regression.json`
 
 ## Structure
 - `fixtures/tplink_router/`: payloads for `tplink_router` adapter contracts.

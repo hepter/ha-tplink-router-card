@@ -1,6 +1,6 @@
 {
   "name": "ha-tplink-router-card",
-  "version": "0.3.1",
+  "version": "0.3.2",
   "private": true,
   "type": "module",
   "description": "Home Assistant Lovelace card for TP-Link client monitoring across tplink_router, tplink_deco, omada, and tplink_omada integrations",

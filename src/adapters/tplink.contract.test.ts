@@ -123,6 +123,25 @@ describe("tplink adapter contract fixtures", () => {
     expect(row.bandType).toBe(fixture.expected.bandType);
   });
 
+  it("treats unknown rows with 0.0.0.0 ip as offline and non-wifi", () => {
+    const state: HassEntity = {
+      entity_id: "device_tracker.unknown_client",
+      state: "home",
+      attributes: {
+        source_type: "router",
+        friendly_name: "Unknown Client",
+        ip: "0.0.0.0",
+        connection: "Unknown",
+        band: "Unknown",
+      },
+    };
+
+    const row = mapTrackerStateToRow(state, "MBps", "auto");
+    expect(row.isOnline).toBe(false);
+    expect(row.connectionType).toBe("unknown");
+    expect(row.bandType).toBe("unknown");
+  });
+
   it("does not fall back to other entries when selected entry has no tracker match", () => {
     const states: Record<string, HassEntity> = {
       "device_tracker.client_a": {

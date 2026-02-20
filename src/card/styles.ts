@@ -251,6 +251,27 @@ export const cardStyles = css`
     border-color: rgba(0, 170, 255, 0.4);
   }
 
+  .row-actions {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    flex-wrap: nowrap;
+  }
+
+  .icon-toggle.row-action {
+    width: 28px;
+    height: 28px;
+    padding: 2px;
+  }
+
+  .icon-toggle.row-action ha-icon {
+    --mdc-icon-size: 20px;
+  }
+
+  td.actions-cell {
+    padding: 2px 10px;
+  }
+
   .band-badge {
     position: absolute;
     bottom: 0px;
@@ -363,6 +384,23 @@ export const cardStyles = css`
     white-space: nowrap;
   }
 
+  .shift-mode.shift-underline-enabled td.shift-entity-clickable {
+    cursor: pointer;
+    text-decoration: underline;
+    text-underline-offset: 2px;
+    text-decoration-thickness: 1px;
+    text-decoration-color: color-mix(in srgb, currentColor 28%, transparent);
+  }
+
+  .shift-mode.shift-underline-enabled td.shift-entity-clickable .speed-value,
+  .shift-mode.shift-underline-enabled td.shift-entity-clickable .rate,
+  .shift-mode.shift-underline-enabled td.shift-entity-clickable .signal {
+    text-decoration: inherit;
+    text-decoration-color: inherit;
+    text-decoration-thickness: inherit;
+    text-underline-offset: inherit;
+  }
+
   .sort-button {
     border: none;
     background: transparent;
@@ -464,6 +502,12 @@ export const cardStyles = css`
     color: var(--secondary-text-color);
     background: rgba(0, 0, 0, 0.04);
     border-color: rgba(0, 0, 0, 0.1);
+  }
+
+  .band-pill.band-wifi {
+    color: #0ea5e9;
+    background: rgba(14, 165, 233, 0.15);
+    border-color: rgba(14, 165, 233, 0.35);
   }
 
   .rate {
@@ -619,6 +663,42 @@ export const cardStyles = css`
     cursor: pointer;
     text-align: left;
     font: inherit;
+  }
+
+  .name-text {
+    color: var(--primary-text-color);
+  }
+
+  .name-cell {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+  }
+
+  .name-device-link {
+    border: none;
+    background: transparent;
+    color: var(--secondary-text-color);
+    padding: 0;
+    margin: 0;
+    width: 14px;
+    height: 14px;
+    min-width: 14px;
+    min-height: 14px;
+    cursor: pointer;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    opacity: 0.5;
+  }
+
+  .name-device-link ha-icon {
+    --mdc-icon-size: 14px;
+  }
+
+  .name-device-link:hover {
+    color: var(--primary-color);
+    opacity: 1;
   }
 
   .empty {
