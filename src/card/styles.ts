@@ -163,7 +163,7 @@ export const cardStyles = css`
   .actions {
     display: inline-flex;
     align-items: center;
-    gap: 16px;
+    gap: 4px 16px;
     flex-wrap: wrap;
     justify-content: flex-end;
   }
@@ -184,6 +184,7 @@ export const cardStyles = css`
     display: inline-flex;
     align-items: center;
     gap: 4px;
+    overflow: hidden;
   }
 
   .icon-toggle {
@@ -200,10 +201,63 @@ export const cardStyles = css`
     cursor: pointer;
     padding: 2px;
     overflow: hidden;
+    flex: 0 0 auto;
   }
 
   .icon-toggle ha-icon {
     --mdc-icon-size: 20px;
+  }
+
+  .action-icon-wrap {
+    position: relative;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 20px;
+    min-width: 20px;
+    height: 20px;
+  }
+
+  .icon-toggle.with-label {
+    width: max-content;
+    max-width: 240px;
+    min-width: 120px;
+    justify-content: flex-start;
+    gap: 6px;
+    padding: 2px 8px;
+  }
+
+  .icon-toggle.with-label .action-separator {
+    opacity: 0.55;
+    font-size: 12px;
+    line-height: 1;
+  }
+
+  .icon-toggle.name-only {
+    width: max-content;
+    max-width: 240px;
+    min-width: 120px;
+    justify-content: flex-start;
+    gap: 0;
+    padding: 2px 8px;
+  }
+
+  .icon-toggle.with-label .action-name {
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    font-size: 12px;
+    line-height: 1;
+  }
+
+  .icon-toggle.name-only .action-name {
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    font-size: 12px;
+    line-height: 1;
   }
 
   .icon-toggle::after {
@@ -214,12 +268,18 @@ export const cardStyles = css`
     bottom: 0;
     height: calc(var(--hold-progress, 0) * 100%);
     background: rgba(60, 180, 90, 0.25);
+    opacity: 0;
     transition: height 0.06s linear;
     pointer-events: none;
   }
 
+  .icon-toggle.holding::after {
+    opacity: 1;
+  }
+
   .icon-toggle.completed::after {
     background: rgba(60, 180, 90, 0.4);
+    opacity: 1;
     animation: holdComplete 0.8s ease-out forwards;
   }
 
@@ -236,6 +296,18 @@ export const cardStyles = css`
     color: var(--primary-color);
     border-color: rgba(0, 0, 0, 0.2);
     background: rgba(0, 0, 0, 0.08);
+  }
+
+  .icon-toggle[data-role="block"][data-state="on"] {
+    color: var(--error-color, #d64545);
+    border-color: color-mix(in srgb, var(--error-color, #d64545) 45%, transparent);
+    background: color-mix(in srgb, var(--error-color, #d64545) 14%, transparent);
+  }
+
+  .icon-toggle[data-role="block"][data-state="off"] {
+    color: var(--success-color, #3aa45b);
+    border-color: color-mix(in srgb, var(--success-color, #3aa45b) 40%, transparent);
+    background: color-mix(in srgb, var(--success-color, #3aa45b) 10%, transparent);
   }
 
   .icon-toggle:disabled {
@@ -256,12 +328,28 @@ export const cardStyles = css`
     align-items: center;
     gap: 4px;
     flex-wrap: nowrap;
+    width: max-content;
+    min-width: max-content;
   }
 
   .icon-toggle.row-action {
     width: 28px;
     height: 28px;
     padding: 2px;
+  }
+
+  .icon-toggle.row-action.with-label {
+    width: max-content;
+    max-width: 240px;
+    min-width: 120px;
+    padding: 2px 8px;
+  }
+
+  .icon-toggle.row-action.name-only {
+    width: max-content;
+    max-width: 240px;
+    min-width: 120px;
+    padding: 2px 8px;
   }
 
   .icon-toggle.row-action ha-icon {
@@ -274,14 +362,93 @@ export const cardStyles = css`
 
   .band-badge {
     position: absolute;
-    bottom: 0px;
-    right: -2px;
+    bottom: -1px;
+    right: -3px;
     background: var(--card-background-color);
     border: none;
     border-radius: 8px;
     font-size: 9px;
     padding: 0 4px;
     color: var(--secondary-text-color);
+  }
+
+  th.actions-cell.sticky-start,
+  td.actions-cell.sticky-start,
+  th.actions-cell.sticky-end,
+  td.actions-cell.sticky-end {
+    max-width: min(88vw, max(260px, 58rem));
+  }
+
+  td.actions-cell.sticky-start .row-actions,
+  td.actions-cell.sticky-end .row-actions {
+    max-width: none;
+    overflow-x: auto;
+    overflow-y: hidden;
+    scrollbar-width: thin;
+  }
+
+  td.actions-cell.sticky-start .cell-content,
+  td.actions-cell.sticky-end .cell-content {
+    display: block;
+    max-width: min(88vw, max(260px, 58rem));
+    overflow-x: auto;
+    overflow-y: hidden;
+    scrollbar-width: thin;
+  }
+
+  .cell-content {
+    display: inline-block;
+    max-width: 100%;
+    vertical-align: middle;
+  }
+
+  td.cell-ellipsis {
+    overflow: hidden;
+  }
+
+  .cell-content.cell-content-ellipsis {
+    display: block;
+    min-width: 0;
+    max-width: 100%;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  th.column-ellipsis .sort-button {
+    display: flex;
+    width: 100%;
+    min-width: 0;
+  }
+
+  th.column-ellipsis .sort-button > span:first-child {
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  td.sticky-start,
+  td.sticky-end {
+    max-width: min(70vw, max(180px, 30rem));
+  }
+
+  td.sticky-start .cell-content,
+  td.sticky-end .cell-content {
+    display: block;
+    max-width: min(70vw, max(180px, 30rem));
+    overflow-x: auto;
+    overflow-y: hidden;
+    white-space: nowrap;
+    scrollbar-width: thin;
+  }
+
+  td.sticky-start .cell-content.cell-content-ellipsis,
+  td.sticky-end .cell-content.cell-content-ellipsis {
+    overflow: hidden;
+    overflow-x: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
   }
 
   .icon-button {
@@ -384,6 +551,64 @@ export const cardStyles = css`
     white-space: nowrap;
   }
 
+  th.sticky-start,
+  td.sticky-start,
+  th.sticky-end,
+  td.sticky-end {
+    position: sticky;
+    background: var(--card-background-color);
+  }
+
+  td.sticky-start,
+  td.sticky-end {
+    z-index: 2;
+  }
+
+  th.sticky-start,
+  th.sticky-end {
+    z-index: 4;
+  }
+
+  td.sticky-end {
+    box-shadow: -1px 0 0 var(--divider-color);
+  }
+
+  .table-wrapper--scrolled-left th.sticky-start-edge,
+  .table-wrapper--scrolled-left td.sticky-start-edge {
+    border-right: 1px solid var(--divider-color);
+    box-shadow: 8px 0 12px -10px rgba(0, 0, 0, 0.42);
+  }
+
+  .table-wrapper--scrolled-left th.sticky-start-edge::after,
+  .table-wrapper--scrolled-left td.sticky-start-edge::after {
+    content: "";
+    position: absolute;
+    top: 0;
+    right: -10px;
+    width: 10px;
+    height: 100%;
+    pointer-events: none;
+    background: linear-gradient(to right, rgba(0, 0, 0, 0.20), rgba(0, 0, 0, 0));
+  }
+
+  .table-wrapper--scrolled-right th.sticky-end-edge,
+  .table-wrapper--scrolled-right td.sticky-end-edge {
+    border-left: 1px solid var(--divider-color);
+    box-shadow: -8px 0 12px -10px rgba(0, 0, 0, 0.42);
+  }
+
+  .table-wrapper--scrolled-right th.sticky-end-edge::before,
+  .table-wrapper--scrolled-right td.sticky-end-edge::before {
+    content: "";
+    position: absolute;
+    top: 0;
+    left: -10px;
+    width: 10px;
+    height: 100%;
+    pointer-events: none;
+    background: linear-gradient(to left, rgba(0, 0, 0, 0.20), rgba(0, 0, 0, 0));
+  }
+
   .shift-mode.shift-underline-enabled td.shift-entity-clickable {
     cursor: pointer;
     text-decoration: underline;
@@ -426,6 +651,11 @@ export const cardStyles = css`
 
   tbody tr:nth-child(odd) {
     background: rgba(0, 0, 0, 0.02);
+  }
+
+  tbody tr:nth-child(odd) td.sticky-start,
+  tbody tr:nth-child(odd) td.sticky-end {
+    background: color-mix(in srgb, var(--card-background-color) 98%, #000 2%);
   }
 
   tbody tr:hover {
@@ -663,16 +893,30 @@ export const cardStyles = css`
     cursor: pointer;
     text-align: left;
     font: inherit;
+    display: block;
+    flex: 1 1 auto;
+    min-width: 0;
+    max-width: 100%;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
   }
 
   .name-text {
     color: var(--primary-text-color);
+    display: block;
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
   }
 
   .name-cell {
-    display: inline-flex;
+    display: flex;
     align-items: center;
     gap: 6px;
+    min-width: 0;
+    max-width: 100%;
   }
 
   .name-device-link {
@@ -704,6 +948,109 @@ export const cardStyles = css`
   .empty {
     padding: 16px 18px 20px;
     color: var(--secondary-text-color);
+  }
+
+  @media (max-width: 1200px) {
+    .title {
+      flex-wrap: wrap;
+      gap: 12px;
+    }
+
+    .actions {
+      gap: 10px;
+    }
+
+    .action-device-select {
+      min-width: 120px;
+      max-width: 190px;
+    }
+  }
+
+  @media (max-width: 900px) {
+    .title {
+      flex-direction: column;
+      align-items: stretch;
+      gap: 10px;
+    }
+
+    .title-main h2 {
+      white-space: normal;
+      overflow: visible;
+      text-overflow: initial;
+    }
+
+    .actions {
+      width: 100%;
+      justify-content: flex-start;
+      align-items: flex-start;
+      gap: 8px;
+    }
+
+    .action-group {
+      flex-wrap: wrap;
+    }
+
+    .action-group .icon-toggle.with-label,
+    .action-group .icon-toggle.name-only {
+      width: calc(50% - 2px);
+      min-width: calc(50% - 2px);
+      max-width: calc(50% - 2px);
+    }
+
+    .router-row {
+      flex-direction: column;
+      align-items: flex-start;
+      gap: 6px;
+    }
+  }
+
+  @media (max-width: 640px) {
+    .header {
+      padding: 12px 12px 10px;
+    }
+
+    .title h2 {
+      font-size: 16px;
+    }
+
+    .controls {
+      margin-top: 10px;
+      flex-direction: column;
+      align-items: stretch;
+      gap: 8px;
+    }
+
+    .search {
+      width: 100%;
+      flex: 1 1 100%;
+      order: 1;
+    }
+
+    .control-actions {
+      width: 100%;
+      order: 2;
+      justify-content: flex-start;
+      flex-wrap: wrap;
+      gap: 8px;
+    }
+
+    .action-group.action-group--wide {
+      width: 100%;
+    }
+
+    .filter-row {
+      padding: 8px 10px;
+    }
+
+    .action-device-select {
+      width: 100%;
+      max-width: none;
+    }
+
+    th,
+    td {
+      padding: 7px 8px;
+    }
   }
 
   :host {

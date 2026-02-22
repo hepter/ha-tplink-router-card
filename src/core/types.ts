@@ -27,6 +27,9 @@ export interface TplinkRouterCardConfig {
   hide_header?: boolean;
   hide_filter_section?: boolean;
   shift_click_underline?: boolean;
+  show_hidden_entities?: boolean;
+  header_action_render?: "icon" | "name" | "icon_name";
+  row_action_render?: "icon" | "name" | "icon_name";
   default_filters?: {
     band?: "all" | "2g" | "5g" | "6g";
     connection?: "all" | "wifi" | "wired" | "iot" | "guest";
@@ -38,6 +41,13 @@ export interface TplinkRouterCardConfig {
   upload_speed_color_max?: number;
   download_speed_color_max?: number;
   columns?: string[];
+  column_layout?: Array<{
+    key: string;
+    fixed?: "start" | "end";
+    name?: string;
+    max_width?: string | number;
+    maxWidth?: string | number;
+  }>;
 }
 
 export interface ConfigEntry {
@@ -51,6 +61,9 @@ export interface EntityRegistryEntry {
   platform: string;
   config_entry_id?: string;
   device_id?: string;
+  hidden_by?: string | null;
+  disabled_by?: string | null;
+  options?: Record<string, unknown>;
 }
 
 export interface DeviceRegistryEntry {

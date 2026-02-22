@@ -10,21 +10,41 @@ A Lovelace card for Home Assistant focused on TP-Link client monitoring and quic
 
 ⭐ Found it useful? Please star the repo to support development and help others discover it.
 
-## Highlights
-- Live client table from router `device_tracker` entities.
-- Fast search (name, IP, hostname, MAC) and compact quick filters.
-- Multi-sort (Shift + click), with empty values always kept at the bottom.
-- Strong formatting for traffic, link rates, duration, and signal quality.
-- Router header with local URL, public IP, CPU/MEM summary, and quick actions.
-- Name-cell navigation:
-  - `tplink_router` / `tplink_deco`: name click opens entity more-info.
-  - `omada` / `tplink_omada`: name click opens device page.
-  - `tplink_router`: inline device shortcut icon in Name column.
-- Hold-to-confirm safety for destructive actions (1 second).
-- Built-in diagnostics export (redacted only).
-- i18n support with automatic Home Assistant locale selection.
-- Optional colorization for TX/RX and Up/Down speeds.
-- Up/Down hover tooltip with utilization bar, Bandwidth Load, adaptive transfer unit, and current/max Mbps.
+## ✨ Features
+
+**📊 Rich Data Visualization**
+- **Live Client Table:** Real-time mapping directly from router `device_tracker` entities.
+- **Smart Formatting:** Human-readable formatting for traffic, link rates, duration, and signal quality.
+- **Colorized Metrics:** Optional color scales for TX/RX and Up/Down speeds for quick visual scanning.
+- **Advanced Tooltips:** Hover over Up/Down speeds for a detailed utilization bar, bandwidth load percentage, adaptive transfer units, and current/max Mbps.
+
+**🎛️ Interactive Controls & Actions**
+- **Router Dashboard:** Header featuring local URL, public IP, CPU/MEM summary, and quick actions.
+- **Customizable Actions:** Row-level and header-level actions with flexible rendering modes (`icon`, `name`, `icon_name`).
+- **Hold-to-Confirm:** 1-second hold requirement for destructive actions to prevent accidental clicks.
+- **Visual State Feedback:** Explicit state coloring for toggle actions.
+- **Haptic Feedback:** Built-in vibration feedback on supported mobile/webview environments during interactions.
+
+**🖱️ Advanced Navigation & Shortcuts**
+- **Shift + Click Entity Access:** Hold `Shift` and click on metric cells (like speed, traffic, signal) to instantly open the underlying Home Assistant entity's more-info dialog.
+- **Name-Cell Navigation:** Click a device name to open its entity more-info (`tplink_router` / `tplink_deco`) or device page (`omada`).
+- **Inline Shortcuts:** Quick device shortcut icons directly in the Name column.
+
+**🎨 Flexible & Responsive Layout**
+- **Powerful `column_layout`:** Define exact column order, custom headers, and per-column `max_width` (`px`, `%`, `vw`, `clamp()`, etc.).
+- **Sticky Columns:** Pin columns to the start or end of the table with elegant edge shadow indicators during horizontal scroll.
+- **Responsive Design:** Header and action layouts adapt perfectly across desktop, tablet, and mobile screens.
+- **Headless Modes:** Hide the header or filter sections for a compact, table-only dashboard view.
+
+**🔍 Search, Filter & Sort**
+- **Fast Search:** Real-time search across name, IP, hostname, and MAC address.
+- **Regex Support:** Use `/pattern/` syntax in the search box for advanced filtering.
+- **Quick Filters:** Compact dropdowns for Band (2.4G/5G/6G), Connection (WiFi/Wired/IoT/Guest), and Status.
+- **Multi-Sort:** `Shift + click` on column headers to sort by multiple columns simultaneously.
+
+**🌍 Global & Developer Features**
+- **i18n Support:** Automatic Home Assistant locale selection (English, Turkish, etc.).
+- **Diagnostics Export:** Built-in, redacted JSON export for easy bug reporting and troubleshooting.
 
 ## Screenshots
 `tplink_router`:
@@ -66,13 +86,11 @@ Detailed matrix: `docs/integration-support.md`
 
 - `tplink_router`:
   - Full client table mapping from router tracker attributes.
-  - Router action icons from exposed `switch.*` / `button.*` entities.
 
 - `tplink_deco`:
   - Client/deco table mapping from `device_tracker.*` entities.
   - Supports `connection_type` and `interface` mapping.
   - Upload/download speed values are normalized automatically.
-  - Action icons are shown only if `switch.*` or `button.*` entities are available in the selected entry.
 
 - Omada (`omada` / `tplink_omada`):
   - Device-based row mapping with controller client data.
@@ -137,6 +155,9 @@ entry_id: <config_entry_id>
 speed_unit: MBps
 txrx_color: true
 updown_color: true
+show_hidden_entities: false
+header_action_render: icon
+row_action_render: icon
 shift_click_underline: true
 hide_header: false
 hide_filter_section: false
@@ -146,35 +167,44 @@ default_filters:
   status: all
 upload_speed_color_max: 1000
 download_speed_color_max: 100
-columns:
-  - status
-  - connection
-  - band
-  - ip
-  - mac
-  - hostname
-  - down
-  - up
+column_layout:
+  - key: name
+    fixed: start
+    max_width: 140px
+  - key: status
+  - key: connection
+  - key: band
+  - key: ip
+  - key: mac
+  - key: hostname
+  - key: down
+  - key: up
 ```
 
-Cross-integration safe baseline `columns`:
+Cross-integration safe baseline `column_layout`:
 ```yaml
-columns:
-  - status
-  - connection
-  - band
-  - ip
-  - mac
-  - hostname
-  - down
-  - up
+column_layout:
+  - key: name
+  - key: status
+  - key: connection
+  - key: band
+  - key: ip
+  - key: mac
+  - key: hostname
+  - key: down
+  - key: up
 ```
 
-Integration-specific extra columns:
+Integration-specific extra keys:
 ```yaml
 # tplink_router
 - packetsSent
 - packetsReceived
+- tx
+- rx
+- online
+- traffic
+- signal
 
 # omada / tplink_omada
 - downloaded
@@ -192,75 +222,80 @@ Integration-specific extra columns:
 
 ### Recommended column presets by integration
 
-`name` is always shown automatically.  
-For YAML users, set `columns` to show only the fields relevant to that integration.
+For YAML users, define the full order with `column_layout`.
 
 `tplink_router` (recommended)
 ```yaml
 type: custom:tplink-router-card
 entry_id: <tplink_router_entry_id>
-columns:
-  - status
-  - connection
-  - band
-  - ip
-  - mac
-  - hostname
-  - packetsSent
-  - packetsReceived
-  - down
-  - up
-  - tx
-  - rx
-  - online
-  - traffic
-  - signal
+column_layout:
+  - key: name
+    fixed: start
+  - key: status
+  - key: connection
+  - key: band
+  - key: ip
+  - key: mac
+  - key: hostname
+  - key: packetsSent
+  - key: packetsReceived
+  - key: down
+  - key: up
+  - key: tx
+  - key: rx
+  - key: online
+  - key: traffic
+  - key: signal
 ```
 
 `tplink_deco` (recommended)
 ```yaml
 type: custom:tplink-router-card
 entry_id: <tplink_deco_entry_id>
-columns:
-  - status
-  - connection
-  - band
-  - ip
-  - mac
-  - hostname
-  - down
-  - up
-  - deviceType
-  - deviceModel
-  - deviceFirmware
-  - deviceStatus
+column_layout:
+  - key: name
+    fixed: start
+  - key: status
+  - key: connection
+  - key: band
+  - key: ip
+  - key: mac
+  - key: hostname
+  - key: down
+  - key: up
+  - key: deviceType
+  - key: deviceModel
+  - key: deviceFirmware
+  - key: deviceStatus
 ```
 
 `omada` / `tplink_omada` (recommended)
 ```yaml
 type: custom:tplink-router-card
 entry_id: <omada_entry_id>
-columns:
-  - status
-  - connection
-  - band
-  - ip
-  - mac
-  - hostname
-  - down
-  - up
-  - online
-  - downloaded
-  - uploaded
-  - traffic
-  - signal
-  - snr
-  - powerSave
-  - deviceType
-  - deviceModel
-  - deviceFirmware
-  - deviceStatus
-  - actions
+column_layout:
+  - key: name
+    fixed: start
+  - key: status
+  - key: connection
+  - key: band
+  - key: ip
+  - key: mac
+  - key: hostname
+  - key: down
+  - key: up
+  - key: online
+  - key: downloaded
+  - key: uploaded
+  - key: traffic
+  - key: signal
+  - key: snr
+  - key: powerSave
+  - key: deviceType
+  - key: deviceModel
+  - key: deviceFirmware
+  - key: deviceStatus
+  - key: actions
 ```
 
 Options:
@@ -269,6 +304,9 @@ Options:
 - `speed_unit`: `MBps` (default) or `Mbps` for Up/Down columns.
 - `txrx_color`: Enable colorized TX/RX speed levels.
 - `updown_color`: Enable colorized upload/download speeds.
+- `show_hidden_entities`: Show hidden switch/button entities in action areas. Default `false`.
+- `header_action_render`: Header action button style: `icon | name | icon_name`. Default `icon`. Works across all supported integrations when header actions exist.
+- `row_action_render`: Row action button style: `icon | name | icon_name`. Default `icon`. Currently effective for Omada row actions (`omada` / `tplink_omada`).
 - `shift_click_underline`: Show Shift+click underline hints for entity-clickable cells (currently Omada-only visual behavior).
 - `hide_header`: Hide the header area.
 - `hide_filter_section`: Hide the filter section.
@@ -278,15 +316,62 @@ Options:
   - `status`: `all | online | offline`
 - `upload_speed_color_max`: Upload color scale max in Mbps. Default `1000`.
 - `download_speed_color_max`: Download color scale max in Mbps. Default `100`.
-- `columns`: Optional column set and order.
+- `column_layout`: Primary column definition with order, sticky columns, and optional header override:
+  - `key` (required): Column key.
+  - `fixed` (optional): `start | end` (default is none, or omit the field).
+  - `name` (optional): Header label override.
+  - `max_width` (optional): CSS `max-width` value for that column.
+    - Number-only values are treated as px (`100` => `100px`).
+    - You can use values like `100px`, `35%`, `22vw`, `10vh`, `18rem`, `clamp(180px, 30vw, 420px)`.
+  - Example:
+    ```yaml
+    column_layout:
+      - key: name
+        fixed: start
+        max_width: 160px
+      - key: status
+      - key: ip
+      - key: actions
+    ```
+  - Header override example:
+    ```yaml
+    column_layout:
+      - key: down
+        name: Download
+      - key: up
+        name: Upload
+    ```
+- `columns` (deprecated): legacy string-array format, kept only for backward compatibility.
 
 Rules:
-- `name` is always visible and cannot be removed.
-- Column order follows `columns` order.
+- Column order follows `column_layout` order.
 - Only columns valid for the selected integration domain are rendered.
+- Sticky behavior is applied only to columns marked with `fixed: start|end`.
+- Sticky columns use edge shadow indicators during horizontal scroll.
+- Non-sticky columns are never width-limited by sticky column rules.
+- `column_layout.max_width` is injected directly as each column's `max-width` style.
+- Legacy `columns` is still accepted and auto-migrated internally to `column_layout`.
 - If `default_filters` is set, it overrides localStorage filter restore on every reload.
 - `hide_filter_section` works well with `default_filters` for fixed filtered dashboards.
 
+### Action styling and curation
+
+`header_action_render` applies to header actions for all supported integrations.
+
+`row_action_render` applies to row-level actions, currently available for `omada` / `tplink_omada`.
+
+- Display mode:
+  - `header_action_render: icon | name | icon_name`
+  - `row_action_render: icon | name | icon_name`
+- Label source:
+  - In `name` / `icon_name` modes, labels come from entity display names.
+  - If you want cleaner labels, rename entities in Home Assistant.
+  - Quick path: **Shift + click** an action button to open entity more-info, then edit the display name.
+- Hide unwanted actions:
+  - Open the target action entity in Home Assistant and set it as hidden (`Visible` off).
+  - Keep `show_hidden_entities: false` (default) to exclude hidden actions from the card.
+  - Set `show_hidden_entities: true` only if you explicitly want hidden actions to appear.
+  - This affects header actions generally, and row actions where row actions are supported.
 
 Editor preview:
 

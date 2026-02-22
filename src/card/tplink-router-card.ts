@@ -96,6 +96,16 @@ type FilterState = {
 type FilterBand = FilterState["band"];
 type FilterConnection = FilterState["connection"];
 type FilterStatus = FilterState["status"];
+type ColumnFixed = "start" | "end";
+type ActionRenderMode = "icon" | "name" | "icon_name";
+type ActionOutcome = "button_press" | "switch_on" | "switch_off";
+
+type ColumnLayoutItem = {
+  key: string;
+  fixed?: ColumnFixed;
+  name?: string;
+  max_width?: string;
+};
 const DEFAULT_FILTERS: FilterState = {
   band: "all",
   connection: "all",
@@ -110,6 +120,7 @@ const FILTER_CONNECTION_VALUES = new Set<FilterConnection>([
   "guest",
 ]);
 const FILTER_STATUS_VALUES = new Set<FilterStatus>(["all", "online", "offline"]);
+const COLUMN_FIXED_NONE = "none";
 
 type ActionItem = {
   entity_id: string;
@@ -122,6 +133,7 @@ type ActionItem = {
   band?: "2g" | "5g" | "6g";
   deviceId?: string;
   deviceName?: string;
+  role?: "block" | "reconnect" | "wlanOptimization" | "reboot" | "toggle";
 };
 
 type HeaderActionItem = ActionItem & {
@@ -167,6 +179,16 @@ const SHIFT_ENTITY_CLICKABLE_COLUMNS = new Set([
   "powerSave",
 ]);
 const AUTO_REFRESH_INTERVAL_MS = 5 * 60 * 1000;// minutes
+const HIDDEN_ENTITY_POLL_INTERVAL_MS = 20 * 1000;
+const HAPTIC_PATTERNS = {
+  tap: 8,
+  holdStart: 12,
+  holdCommit: [16, 22, 16],
+  actionPress: [12, 24, 10],
+  actionOn: [16, 20, 16],
+  actionOff: 46,
+  error: [26, 40, 26],
+};
 
 const looksLikeMac = (value: string) => /^[0-9a-f:-]+$/i.test(value);
 
@@ -226,6 +248,8 @@ export class TplinkRouterCard extends LitElement {
     _speedTooltip: { state: true },
     _selectedActionDeviceId: { state: true },
     _isShiftPressed: { state: true },
+    _tableScrolledLeft: { state: true },
+    _tableScrolledRight: { state: true },
   } as const;
 
   static styles = cardStyles;
@@ -250,6 +274,8 @@ export class TplinkRouterCard extends LitElement {
   private _speedTooltip: SpeedTooltipState | null = null;
   private _selectedActionDeviceId: string | null = null;
   private _isShiftPressed = false;
+  private _tableScrolledLeft = false;
+  private _tableScrolledRight = false;
   private _speedTooltipOpenTimer?: number;
   private _speedTooltipHideTimer?: number;
   private _refreshTimer?: number;
@@ -258,6 +284,9 @@ export class TplinkRouterCard extends LitElement {
   private _isPageVisible = true;
   private _isCardVisible = true;
   private _visibilityObserver?: IntersectionObserver;
+  private _tableResizeObserver?: ResizeObserver;
+  private _stickyStartColumnKeys: string[] = [];
+  private _stickyEndColumnKeys: string[] = [];
 
   setConfig(config: TplinkRouterCardConfig): void {
     const previousEntryId = this._config?.entry_id;
@@ -267,6 +296,13 @@ export class TplinkRouterCard extends LitElement {
       ...(config ?? {}),
       type: "custom:tplink-router-card",
     };
+    const allColumnKeys = new Set<string>(["name", ...ALL_COLUMN_KEYS]);
+    // Backward compatibility:
+    // - Prefer the new object-based `column_layout` as the primary source.
+    // - If missing, transparently map legacy string-array `columns` into `column_layout`.
+    const normalizedColumnLayout =
+      this._resolveConfiguredColumnLayoutFromInput(normalizedInput.column_layout, allColumnKeys) ??
+      this._normalizeLegacyColumnsToLayout(normalizedInput.columns, allColumnKeys);
     const normalized = normalizedInput;
     const normalizedDefaultFilters = this._resolveConfiguredDefaultFilters(normalizedInput);
     const uploadSpeedColorMax =
@@ -282,7 +318,12 @@ export class TplinkRouterCard extends LitElement {
       txrx_color: true,
       updown_color: true,
       shift_click_underline: true,
+      show_hidden_entities: false,
+      header_action_render: "icon",
+      row_action_render: "icon",
       ...normalized,
+      columns: undefined,
+      column_layout: normalizedColumnLayout.length > 0 ? normalizedColumnLayout : undefined,
       default_filters: normalizedDefaultFilters ?? undefined,
       upload_speed_color_max: uploadSpeedColorMax,
       download_speed_color_max: downloadSpeedColorMax,
@@ -303,6 +344,8 @@ export class TplinkRouterCard extends LitElement {
     if (changed.has("hass")) {
       this._loadRegistries();
     }
+    this._ensureStickyResizeObserver();
+    this._applyStickyColumnOffsets();
   }
 
   connectedCallback(): void {
@@ -342,6 +385,10 @@ export class TplinkRouterCard extends LitElement {
     if (this._visibilityObserver) {
       this._visibilityObserver.disconnect();
       this._visibilityObserver = undefined;
+    }
+    if (this._tableResizeObserver) {
+      this._tableResizeObserver.disconnect();
+      this._tableResizeObserver = undefined;
     }
   }
 
@@ -402,19 +449,139 @@ export class TplinkRouterCard extends LitElement {
     }
   }
 
+  private _getRegistryRefreshIntervalMs() {
+    if (this._config?.show_hidden_entities) return AUTO_REFRESH_INTERVAL_MS;
+    return HIDDEN_ENTITY_POLL_INTERVAL_MS;
+  }
+
   private _updateRefreshScheduling() {
     this._clearRefreshTimer();
     if (!this._loaded || !this._isVisibleForRefresh()) return;
     const elapsed = Date.now() - this._lastRegistryRefreshAt;
-    const delay = Math.max(AUTO_REFRESH_INTERVAL_MS - elapsed, 0);
+    const interval = this._getRegistryRefreshIntervalMs();
+    const delay = Math.max(interval - elapsed, 0);
     this._refreshTimer = window.setTimeout(() => {
       void this._runScheduledRefresh();
     }, delay);
   }
 
+  private _vibrate(pattern: number | number[]) {
+    try {
+      if (typeof navigator !== "undefined" && typeof navigator.vibrate === "function") {
+        if (Array.isArray(pattern)) {
+          navigator.vibrate([...pattern]);
+        } else {
+          navigator.vibrate(pattern);
+        }
+      }
+    } catch {
+      // Ignore vibration errors across browsers/webviews.
+    }
+  }
+
+  private _hapticTap() {
+    this._vibrate(HAPTIC_PATTERNS.tap);
+  }
+
+  private _hapticHoldStart() {
+    this._vibrate(HAPTIC_PATTERNS.holdStart);
+  }
+
+  private _hapticHoldCommit() {
+    this._vibrate(HAPTIC_PATTERNS.holdCommit);
+  }
+
+  private _hapticActionOutcome(outcome: ActionOutcome) {
+    if (outcome === "switch_on") {
+      this._vibrate(HAPTIC_PATTERNS.actionOn);
+      return;
+    }
+    if (outcome === "switch_off") {
+      this._vibrate(HAPTIC_PATTERNS.actionOff);
+      return;
+    }
+    this._vibrate(HAPTIC_PATTERNS.actionPress);
+  }
+
+  private _hapticError() {
+    this._vibrate(HAPTIC_PATTERNS.error);
+  }
+
+  private _ensureStickyResizeObserver() {
+    if (typeof ResizeObserver === "undefined") return;
+    if (!this.renderRoot) return;
+    const wrapper = this.renderRoot.querySelector(".table-wrapper");
+    if (!wrapper) return;
+    if (this._tableResizeObserver) return;
+    this._tableResizeObserver = new ResizeObserver(() => {
+      this._applyStickyColumnOffsets();
+    });
+    this._tableResizeObserver.observe(wrapper);
+  }
+
+  private _applyStickyColumnOffsets() {
+    if (!this.renderRoot) return;
+    const wrapper = this.renderRoot.querySelector(".table-wrapper");
+    this._updateTableScrollState(wrapper instanceof HTMLElement ? wrapper : null);
+    const table = this.renderRoot.querySelector("table");
+    if (!table) return;
+    const allCells = Array.from(table.querySelectorAll<HTMLElement>("[data-col-key]"));
+    for (const cell of allCells) {
+      if (!cell.classList.contains("sticky-start")) {
+        cell.style.left = "";
+      }
+      if (!cell.classList.contains("sticky-end")) {
+        cell.style.right = "";
+      }
+    }
+    const headerCells = Array.from(
+      table.querySelectorAll<HTMLElement>("thead th[data-col-key]"),
+    );
+    if (headerCells.length === 0) return;
+
+    const widthByKey = new Map<string, number>();
+    for (const cell of headerCells) {
+      const key = cell.dataset.colKey;
+      if (!key) continue;
+      widthByKey.set(key, cell.getBoundingClientRect().width);
+    }
+
+    let leftOffset = 0;
+    for (const key of this._stickyStartColumnKeys) {
+      const width = widthByKey.get(key) ?? 0;
+      this._setStickyOffset(table, key, "start", leftOffset);
+      leftOffset += width;
+    }
+
+    let rightOffset = 0;
+    for (const key of [...this._stickyEndColumnKeys].reverse()) {
+      const width = widthByKey.get(key) ?? 0;
+      this._setStickyOffset(table, key, "end", rightOffset);
+      rightOffset += width;
+    }
+  }
+
+  private _setStickyOffset(
+    table: Element,
+    key: string,
+    side: ColumnFixed,
+    offset: number,
+  ) {
+    const selector = `[data-col-key="${key}"]`;
+    const cells = Array.from(table.querySelectorAll<HTMLElement>(selector));
+    for (const cell of cells) {
+      if (side === "start" && cell.classList.contains("sticky-start")) {
+        cell.style.left = `${offset}px`;
+      }
+      if (side === "end" && cell.classList.contains("sticky-end")) {
+        cell.style.right = `${offset}px`;
+      }
+    }
+  }
+
   private _maybeRefreshOnVisible() {
     if (!this._loaded || !this._isVisibleForRefresh()) return;
-    const due = Date.now() - this._lastRegistryRefreshAt >= AUTO_REFRESH_INTERVAL_MS;
+    const due = Date.now() - this._lastRegistryRefreshAt >= this._getRegistryRefreshIntervalMs();
     if (!due && !this._pendingVisibilityRefresh) return;
     if (this._loading) {
       this._pendingVisibilityRefresh = true;
@@ -428,7 +595,7 @@ export class TplinkRouterCard extends LitElement {
     this._refreshTimer = undefined;
     try {
       if (!this._loaded || !this._isVisibleForRefresh()) return;
-      const due = Date.now() - this._lastRegistryRefreshAt >= AUTO_REFRESH_INTERVAL_MS;
+      const due = Date.now() - this._lastRegistryRefreshAt >= this._getRegistryRefreshIntervalMs();
       if (!due) return;
       if (this._loading) {
         this._pendingVisibilityRefresh = true;
@@ -498,6 +665,22 @@ export class TplinkRouterCard extends LitElement {
         config_entry_id:
           typeof raw.config_entry_id === "string" ? raw.config_entry_id : undefined,
         device_id: typeof raw.device_id === "string" ? raw.device_id : undefined,
+        hidden_by:
+          typeof raw.hidden_by === "string"
+            ? raw.hidden_by
+            : raw.hidden_by === null
+              ? null
+              : undefined,
+        disabled_by:
+          typeof raw.disabled_by === "string"
+            ? raw.disabled_by
+            : raw.disabled_by === null
+              ? null
+              : undefined,
+        options:
+          raw.options && typeof raw.options === "object"
+            ? (raw.options as Record<string, unknown>)
+            : undefined,
       };
       if (!mapped.platform) continue;
       byId.set(entityId, mapped);
@@ -681,6 +864,120 @@ export class TplinkRouterCard extends LitElement {
       : null;
   }
 
+  private _normalizeColumnFixed(value: unknown): ColumnFixed | undefined {
+    if (typeof value === "number") {
+      if (value === 1) return "start";
+      if (value === 2) return "end";
+      return undefined;
+    }
+    if (typeof value !== "string") return undefined;
+    const normalized = value.trim().toLowerCase();
+    if (!normalized || normalized === COLUMN_FIXED_NONE) return undefined;
+    if (normalized === "start" || normalized === "end") return normalized;
+    return undefined;
+  }
+
+  private _normalizeColumnName(value: unknown): string | undefined {
+    if (typeof value !== "string") return undefined;
+    const normalized = value.trim();
+    return normalized.length > 0 ? normalized : undefined;
+  }
+
+  private _normalizeColumnMaxWidth(value: unknown): string | undefined {
+    if (typeof value === "number" && Number.isFinite(value) && value > 0) {
+      return `${value}px`;
+    }
+    if (typeof value !== "string") return undefined;
+    const normalized = value.trim();
+    if (!normalized) return undefined;
+    if (/^\d+(\.\d+)?$/.test(normalized)) {
+      return `${normalized}px`;
+    }
+    if (/[;{}]/.test(normalized)) return undefined;
+    if (!/^[0-9a-zA-Z%._\-+/*(),\s]+$/.test(normalized)) return undefined;
+    return normalized;
+  }
+
+  private _resolveConfiguredColumnLayoutFromInput(
+    input: unknown,
+    allowedColumns: Set<string>,
+  ): ColumnLayoutItem[] | null {
+    if (!Array.isArray(input) || input.length === 0) return null;
+    const deduped = new Set<string>();
+    const parsed: ColumnLayoutItem[] = [];
+
+    for (const item of input) {
+      let keyRaw: unknown;
+      let fixedRaw: unknown;
+      let nameRaw: unknown;
+      let maxWidthRaw: unknown;
+      if (typeof item === "string") {
+        keyRaw = item;
+      } else if (item && typeof item === "object") {
+        const obj = item as Record<string, unknown>;
+        keyRaw = obj.key;
+        fixedRaw = obj.fixed;
+        nameRaw = obj.name;
+        maxWidthRaw = obj.max_width ?? obj.maxWidth;
+        // Backward compatibility for malformed object-array rows produced by older editor states:
+        // { "0": "<key>", "1": "<fixed>", "2": "<name>", "3": "<max_width>" }
+        if (keyRaw === undefined && obj["0"] !== undefined) {
+          keyRaw = obj["0"];
+          fixedRaw = obj["1"];
+          nameRaw = obj["2"];
+          maxWidthRaw = obj["3"];
+        }
+      } else {
+        continue;
+      }
+      if (typeof keyRaw !== "string") continue;
+      const key = keyRaw.trim();
+      if (!key || deduped.has(key) || !allowedColumns.has(key)) continue;
+      const fixed = this._normalizeColumnFixed(fixedRaw);
+      const name = this._normalizeColumnName(nameRaw);
+      const maxWidth = this._normalizeColumnMaxWidth(maxWidthRaw);
+      const layoutItem: ColumnLayoutItem = { key };
+      if (fixed !== undefined) {
+        layoutItem.fixed = fixed;
+      }
+      if (name !== undefined) {
+        layoutItem.name = name;
+      }
+      if (maxWidth !== undefined) {
+        layoutItem.max_width = maxWidth;
+      }
+      parsed.push(layoutItem);
+      deduped.add(key);
+    }
+
+    return parsed.length > 0 ? parsed : null;
+  }
+
+  private _normalizeLegacyColumnsToLayout(
+    input: unknown,
+    allowedColumns: Set<string>,
+  ): ColumnLayoutItem[] {
+    // Legacy migration path:
+    // Accept old `columns: string[]` and convert to the modern `column_layout` structure.
+    if (!Array.isArray(input) || input.length === 0) return [];
+    const deduped = new Set<string>();
+    const parsed: ColumnLayoutItem[] = [];
+    for (const item of input) {
+      if (typeof item !== "string") continue;
+      const key = item.trim();
+      if (!key || deduped.has(key) || !allowedColumns.has(key)) continue;
+      parsed.push({ key });
+      deduped.add(key);
+    }
+    return parsed;
+  }
+
+  private _resolveConfiguredColumnLayout(
+    allowedColumns: Set<string>,
+  ): ColumnLayoutItem[] | null {
+    return this._resolveConfiguredColumnLayoutFromInput(this._config?.column_layout, allowedColumns);
+  }
+
   private _resolveConfiguredDefaultFilters(
     config?: TplinkRouterCardConfig,
   ): FilterState | null {
@@ -788,6 +1085,7 @@ export class TplinkRouterCard extends LitElement {
     const group = target.dataset.group as keyof FilterState | undefined;
     const value = target.dataset.value as FilterState[keyof FilterState] | undefined;
     if (!group || value === undefined) return;
+    this._hapticTap();
     this._setFilter(group, value);
   }
 
@@ -830,10 +1128,12 @@ export class TplinkRouterCard extends LitElement {
 
   private _toggleExportButton(ev: MouseEvent) {
     ev.preventDefault();
+    this._hapticTap();
     this._showExportButton = !this._showExportButton;
   }
 
   private _toggleSort(ev: MouseEvent, key: string) {
+    this._hapticTap();
     const shift = ev.shiftKey;
     const existingIndex = this._sorts.findIndex((sort) => sort.key === key);
     const existing = existingIndex >= 0 ? this._sorts[existingIndex] : null;
@@ -909,6 +1209,7 @@ export class TplinkRouterCard extends LitElement {
   }
 
   private _showMoreInfo(entityId: string) {
+    this._hapticTap();
     this.dispatchEvent(
       new CustomEvent("hass-action", {
         detail: {
@@ -935,6 +1236,7 @@ export class TplinkRouterCard extends LitElement {
   }
 
   private _openUrl(url: string) {
+    this._hapticTap();
     window.open(url, "_blank", "noopener,noreferrer");
   }
 
@@ -1207,7 +1509,9 @@ export class TplinkRouterCard extends LitElement {
         text.includes("radio") ||
         text.includes("ssid") ||
         text.includes("guest") ||
-        text.includes("iot"))
+        text.includes("iot") ||
+        text.includes("block") ||
+        text.includes("blocked"))
     ) {
       return true;
     }
@@ -1222,6 +1526,7 @@ export class TplinkRouterCard extends LitElement {
     const states = registry
       .map((entry) => this.hass?.states[entry.entity_id])
       .filter((state) => state !== undefined)
+      .filter((state) => this._shouldIncludeActionEntity(registryByEntity.get(state.entity_id)))
       .filter((state) =>
         state.entity_id.startsWith("switch.") || state.entity_id.startsWith("button."),
       ) as HassEntity[];
@@ -1238,10 +1543,32 @@ export class TplinkRouterCard extends LitElement {
         const deviceId = registryEntry?.device_id ?? registryEntry?.entity_id;
         const device = deviceId ? deviceById.get(deviceId) : undefined;
 
-        const icon = String(
-          (state.attributes as Record<string, unknown>).icon ??
-          (domain === "button" ? "mdi:restart" : "mdi:wifi"),
-        );
+        const isBlockAction =
+          text.includes(" block") ||
+          text.includes("_block") ||
+          text.includes("block_") ||
+          text.includes("blocked");
+        const isReconnectAction = text.includes("reconnect");
+        const isWlanOptimizationAction =
+          text.includes("wlan optimization") ||
+          text.includes("rf planning") ||
+          text.includes("ai optimization");
+        const isRebootAction = text.includes("reboot") || text.includes("restart");
+        const role: ActionItem["role"] = isBlockAction
+          ? "block"
+          : isReconnectAction
+            ? "reconnect"
+            : isWlanOptimizationAction
+              ? "wlanOptimization"
+              : isRebootAction
+                ? "reboot"
+                : "toggle";
+
+        const icon = (() => {
+          const attrIcon = (state.attributes as Record<string, unknown>).icon;
+          if (typeof attrIcon === "string" && attrIcon.trim().length > 0) return attrIcon;
+          return domain === "button" ? "mdi:gesture-tap-button" : "mdi:toggle-switch";
+        })();
         const isOn = state.state === "on";
         const available =
           domain === "button" ? state.state !== "unavailable" : state.state !== "unavailable";
@@ -1257,6 +1584,7 @@ export class TplinkRouterCard extends LitElement {
           band: parseActionBand(text),
           deviceId,
           deviceName: device?.name_by_user ?? device?.name,
+          role,
         } as ActionItem;
       })
       .filter((item): item is ActionItem => item !== null);
@@ -1349,10 +1677,51 @@ export class TplinkRouterCard extends LitElement {
     return buildActionDeviceOptions(actionItems, this._deviceRegistry);
   }
 
+  private _hasVisibleFalseFlag(value: unknown, depth = 0): boolean {
+    if (!value || depth > 4) return false;
+    if (Array.isArray(value)) {
+      return value.some((item) => this._hasVisibleFalseFlag(item, depth + 1));
+    }
+    if (typeof value !== "object") return false;
+    const obj = value as Record<string, unknown>;
+    if ("visible" in obj && obj.visible === false) return true;
+    return Object.values(obj).some((child) => this._hasVisibleFalseFlag(child, depth + 1));
+  }
+
+  private _isEntityHidden(entry: EntityRegistryEntry | undefined): boolean {
+    if (!entry) return false;
+    if (typeof entry.hidden_by === "string" && entry.hidden_by.trim().length > 0) return true;
+    return this._hasVisibleFalseFlag(entry.options);
+  }
+
+  private _shouldIncludeActionEntity(entry: EntityRegistryEntry | undefined): boolean {
+    if (this._config?.show_hidden_entities) return true;
+    return !this._isEntityHidden(entry);
+  }
+
   private _actionDeviceChanged(ev: Event) {
     const target = ev.target as HTMLSelectElement;
     const value = target.value?.trim();
+    this._hapticTap();
     this._selectedActionDeviceId = value ? value : null;
+  }
+
+  private _updateTableScrollState(target: HTMLElement | null) {
+    if (!target) return;
+    const leftActive = this._stickyStartColumnKeys.length > 0 && target.scrollLeft > 1;
+    const maxScrollLeft = Math.max(target.scrollWidth - target.clientWidth, 0);
+    const rightActive = this._stickyEndColumnKeys.length > 0 && target.scrollLeft < maxScrollLeft - 1;
+    if (leftActive !== this._tableScrolledLeft) {
+      this._tableScrolledLeft = leftActive;
+    }
+    if (rightActive !== this._tableScrolledRight) {
+      this._tableScrolledRight = rightActive;
+    }
+  }
+
+  private _handleTableScroll(ev: Event) {
+    const target = ev.currentTarget as HTMLElement | null;
+    this._updateTableScrollState(target);
   }
 
   private _getRouterEntityId(entryId: string | undefined): string | undefined {
@@ -1377,14 +1746,15 @@ export class TplinkRouterCard extends LitElement {
     );
   }
 
-  private async _handleAction(item: ActionItem) {
-    if (!this.hass?.callService || !item.available) return;
+  private async _handleAction(item: ActionItem): Promise<ActionOutcome> {
+    if (!this.hass?.callService || !item.available) return "button_press";
     if (item.domain === "button") {
       await this._callServiceWithRetry("button", "press", { entity_id: item.entity_id });
-      return;
+      return "button_press";
     }
     const service = item.isOn ? "turn_off" : "turn_on";
     await this._callServiceWithRetry("switch", service, { entity_id: item.entity_id });
+    return service === "turn_on" ? "switch_on" : "switch_off";
   }
 
   private async _callServiceWithRetry(
@@ -1417,15 +1787,58 @@ export class TplinkRouterCard extends LitElement {
     }
   }
 
-  private _invokeAction(item: ActionItem) {
-    void this._handleAction(item).catch((error) => {
-      // Keep the UI responsive and log action failures for diagnostics.
-      console.error("[tplink-router-card] action failed", {
-        entity_id: item.entity_id,
-        domain: item.domain,
-        error,
+  private _invokeAction(item: ActionItem, options?: { fromHold?: boolean }) {
+    if (!options?.fromHold) {
+      this._hapticTap();
+    }
+    void this._handleAction(item)
+      .then((outcome) => {
+        this._hapticActionOutcome(outcome);
+      })
+      .catch((error) => {
+        this._hapticError();
+        // Keep the UI responsive and log action failures for diagnostics.
+        console.error("[tplink-router-card] action failed", {
+          entity_id: item.entity_id,
+          domain: item.domain,
+          kind: item.role,
+          error,
+        });
       });
-    });
+  }
+
+  private _getActionRenderMode(target: "header" | "row"): ActionRenderMode {
+    const value =
+      target === "header" ? this._config?.header_action_render : this._config?.row_action_render;
+    if (value === "icon" || value === "name" || value === "icon_name") return value;
+    return "icon";
+  }
+
+  private _renderActionButtonContent(
+    item: Pick<ActionItem, "icon" | "label" | "band">,
+    mode: ActionRenderMode,
+  ) {
+    const bandLabel = item.band === "2g" ? "2.4" : item.band?.replace("g", "");
+    const hasBand = Boolean(item.band && bandLabel);
+    if (mode === "icon") {
+      return html`
+        <span class="action-icon-wrap">
+          <ha-icon .icon=${item.icon}></ha-icon>
+          ${hasBand ? html`<span class="band-badge">${bandLabel}</span>` : ""}
+        </span>
+      `;
+    }
+    if (mode === "name") {
+      return html`<span class="action-name" title=${item.label}>${item.label}</span>`;
+    }
+    return html`
+      <span class="action-icon-wrap">
+        <ha-icon .icon=${item.icon}></ha-icon>
+        ${hasBand ? html`<span class="band-badge">${bandLabel}</span>` : ""}
+      </span>
+      <span class="action-separator">|</span>
+      <span class="action-name" title=${item.label}>${item.label}</span>
+    `;
   }
 
   private _getEntryStates(entryId: string | undefined): HassEntity[] {
@@ -1676,6 +2089,7 @@ export class TplinkRouterCard extends LitElement {
   }
 
   private _downloadDebugExport() {
+    this._hapticTap();
     const payload = buildDiagnosticPackage(this._buildDebugExportPayload(), {
       limits: {
         maxDepth: 8,
@@ -1702,6 +2116,7 @@ export class TplinkRouterCard extends LitElement {
     if (!item.available) return;
     ev.preventDefault();
     ev.stopPropagation();
+    this._hapticHoldStart();
     const id = item.entity_id;
     if (this._holdAnimationIds[id]) {
       cancelAnimationFrame(this._holdAnimationIds[id]);
@@ -1711,6 +2126,8 @@ export class TplinkRouterCard extends LitElement {
       window.clearTimeout(this._holdTimers[id]);
       delete this._holdTimers[id];
     }
+    this._holdStates[id] = { progress: 0, completed: false };
+    this.requestUpdate();
     const start = performance.now();
     const tick = () => {
       const elapsed = performance.now() - start;
@@ -1719,12 +2136,13 @@ export class TplinkRouterCard extends LitElement {
       this.requestUpdate();
       if (progress >= 1) {
         delete this._holdAnimationIds[id];
-        this._invokeAction(item);
+        this._hapticHoldCommit();
+        this._invokeAction(item, { fromHold: true });
         this._holdTimers[id] = window.setTimeout(() => {
           this._holdStates[id] = { progress: 0, completed: false };
           this.requestUpdate();
           delete this._holdTimers[id];
-        }, 800);
+        }, 820);
         return;
       }
       this._holdAnimationIds[id] = requestAnimationFrame(tick);
@@ -1941,26 +2359,63 @@ export class TplinkRouterCard extends LitElement {
       },
     ];
     const configuredColumns = Array.isArray(this._config?.columns) ? this._config.columns : [];
+    const configuredLayoutKeys = Array.isArray(this._config?.column_layout)
+      ? this._config.column_layout
+        .map((item) => (item && typeof item === "object" ? (item as { key?: unknown }).key : undefined))
+        .filter((value): value is string => typeof value === "string")
+      : [];
     const allowedColumns = new Set<string>([
       "name",
       ...getAllowedColumnsForDomain(entryDomain),
       ...configuredColumns,
+      ...configuredLayoutKeys,
     ]);
     const columnMap = new Map(columns.map((col) => [col.key, col]));
-    const defaultColumnKeys = columns
-      .filter((col) => col.key !== "name" && allowedColumns.has(col.key))
-      .map((col) => col.key);
+    const defaultColumnKeys = columns.filter((col) => allowedColumns.has(col.key)).map((col) => col.key);
     const selectedColumns =
       this._config?.columns && this._config.columns.length > 0
         ? this._config.columns
         : defaultColumnKeys;
-    const deduped = Array.from(new Set(selectedColumns)).filter(
-      (key) => key !== "name" && allowedColumns.has(key),
-    );
-    const displayColumns = [
-      columnMap.get("name"),
-      ...deduped.map((key) => columnMap.get(key)),
-    ].filter((col): col is (typeof columns)[number] => col !== undefined);
+    const deduped = Array.from(new Set(selectedColumns)).filter((key) => allowedColumns.has(key));
+    const legacyLayout: ColumnLayoutItem[] = deduped.map((key) => ({ key }));
+    const displayLayout = this._resolveConfiguredColumnLayout(allowedColumns) ?? legacyLayout;
+    type DisplayColumnLayout = {
+      key: string;
+      fixed?: ColumnFixed;
+      name?: string;
+      max_width?: string;
+      col: ColumnDef;
+    };
+    const displayColumnsWithLayout: DisplayColumnLayout[] = displayLayout
+      .map((item) => {
+        const col = columnMap.get(item.key);
+        if (!col) return null;
+        return {
+          ...item,
+          col,
+        };
+      })
+      .filter((item): item is DisplayColumnLayout => item !== null);
+    const fallbackColumnsWithLayout: DisplayColumnLayout[] =
+      displayColumnsWithLayout.length > 0
+        ? displayColumnsWithLayout
+        : defaultColumnKeys
+          .map((key) => {
+            const col = columnMap.get(key);
+            return col
+              ? ({ key, fixed: undefined, name: undefined, max_width: undefined, col } as DisplayColumnLayout)
+              : null;
+          })
+          .filter((item): item is DisplayColumnLayout => item !== null);
+    const displayColumns = fallbackColumnsWithLayout.map((item) => item.col);
+    this._stickyStartColumnKeys = fallbackColumnsWithLayout
+      .filter((item) => item.fixed === "start")
+      .map((item) => item.key);
+    this._stickyEndColumnKeys = fallbackColumnsWithLayout
+      .filter((item) => item.fixed === "end")
+      .map((item) => item.key);
+    const lastStickyStartKey = this._stickyStartColumnKeys[this._stickyStartColumnKeys.length - 1];
+    const firstStickyEndKey = this._stickyEndColumnKeys[0];
 
     const allowedSortKeys = new Set(displayColumns.map((col) => col.key));
     const activeSorts = this._sorts.filter((sort) => allowedSortKeys.has(sort.key));
@@ -2037,6 +2492,8 @@ export class TplinkRouterCard extends LitElement {
     );
     const rowActionsByDevice = this._getRowActionsByDevice(actionItems);
     const holdSeconds = Math.max(1, Math.round(HOLD_DURATION_MS / 1000));
+    const headerActionRenderMode = this._getActionRenderMode("header");
+    const rowActionRenderMode = this._getActionRenderMode("row");
     const routerEntityId = this._getRouterEntityId(entryId);
     const entryTitle = selectedEntry?.title ?? cachedEntryTitle;
     const entryStates = this._getEntryStates(entryId);
@@ -2074,9 +2531,16 @@ export class TplinkRouterCard extends LitElement {
       routerDetails.mac ? `MAC: ${routerDetails.mac}` : null,
     ].filter(Boolean) as string[];
     const routerInfoText = routerInfoLines.join("\n");
+    const isOmadaEntry = entryDomain === "omada" || entryDomain === "tplink_omada";
+    const endpointLabel = isOmadaEntry ? t("card.controllerLabel") : t("card.routerLabel");
+    const endpointFallback = isOmadaEntry
+      ? entryTitle ?? entryId
+      : localUrl ?? entryTitle ?? entryId;
     const routerLabel = entryId
-      ? `${t("card.routerLabel")}: ${localUrl ?? entryTitle ?? entryId}`
-      : t("card.routerNotSelected");
+      ? `${endpointLabel}: ${endpointFallback}`
+      : isOmadaEntry
+        ? t("card.controllerNotSelected")
+        : t("card.routerNotSelected");
     const hideHeader = Boolean(this._config?.hide_header);
     const hideFilterSection = Boolean(this._config?.hide_filter_section);
     const showBandFilterGroup = bandFilterOptions.length > 1;
@@ -2090,7 +2554,15 @@ export class TplinkRouterCard extends LitElement {
       actionDeviceOptions.find((option) => option.deviceId === this._selectedActionDeviceId)
         ?.deviceId ??
       actionDeviceOptions[0]?.deviceId;
+    const selectedActionDeviceName =
+      actionDeviceOptions.find((option) => option.deviceId === selectedActionDeviceId)
+        ?.deviceName ??
+      routerDevice?.name_by_user ??
+      routerDevice?.name;
     const selectedRouterDeviceId = selectedActionDeviceId ?? routerDevice?.id;
+    const routerActionTooltip = selectedActionDeviceName
+      ? t("actions.goToDevice", { name: selectedActionDeviceName })
+      : t("actions.router");
     const selectedActionStates = selectedActionDeviceId
       ? this._getStatesForDevice(entryId, selectedActionDeviceId)
       : [];
@@ -2140,6 +2612,8 @@ export class TplinkRouterCard extends LitElement {
     };
 
     const underlineOnShift = this._config?.shift_click_underline !== false;
+    const actionGroupClass =
+      headerActionRenderMode === "icon" ? "action-group" : "action-group action-group--wide";
     const cardClasses = [
       this._isShiftPressed ? "shift-mode" : "",
       underlineOnShift ? "shift-underline-enabled" : "shift-underline-disabled",
@@ -2191,7 +2665,7 @@ export class TplinkRouterCard extends LitElement {
         : nothing}
               ${actionGroups.host.length
         ? html`
-                    <div class="action-group" title=${t("actions.wifi")}>
+                    <div class=${actionGroupClass} title=${t("actions.wifi")}>
                       ${actionGroups.host.map(
           (item) => {
             const hold = this._holdStates[item.entity_id] ?? {
@@ -2200,8 +2674,13 @@ export class TplinkRouterCard extends LitElement {
             };
             return html`
                             <button
-                              class="icon-toggle ${hold.progress > 0 ? "holding" : ""} ${hold.completed ? "completed" : ""}"
+                              class="icon-toggle ${headerActionRenderMode === "icon_name"
+                ? "with-label"
+                : headerActionRenderMode === "name"
+                  ? "name-only"
+                  : ""} ${hold.progress > 0 ? "holding" : ""} ${hold.completed ? "completed" : ""}"
                               data-kind="host"
+                              data-role=${item.role ?? "toggle"}
                               data-state=${item.isOn ? "on" : "off"}
                               title=${item.requiresHold
                 ? t("actions.holdWithLabel", { seconds: holdSeconds, label: item.label })
@@ -2222,12 +2701,9 @@ export class TplinkRouterCard extends LitElement {
                   return;
                 }
                 this._invokeAction(item);
-              }}
+                              }}
                             >
-                              <ha-icon .icon=${item.icon}></ha-icon>
-                              ${item.band
-                ? html`<span class="band-badge">${item.band === "2g" ? "2.4" : item.band.replace("g", "")}</span>`
-                : ""}
+                              ${this._renderActionButtonContent(item, headerActionRenderMode)}
                             </button>
                           `;
           },
@@ -2237,7 +2713,7 @@ export class TplinkRouterCard extends LitElement {
         : ""}
               ${actionGroups.guest.length
         ? html`
-                    <div class="action-group" title=${t("actions.guest")}>
+                    <div class=${actionGroupClass} title=${t("actions.guest")}>
                       ${actionGroups.guest.map(
           (item) => {
             const hold = this._holdStates[item.entity_id] ?? {
@@ -2246,8 +2722,13 @@ export class TplinkRouterCard extends LitElement {
             };
             return html`
                             <button
-                              class="icon-toggle ${hold.progress > 0 ? "holding" : ""} ${hold.completed ? "completed" : ""}"
+                              class="icon-toggle ${headerActionRenderMode === "icon_name"
+                ? "with-label"
+                : headerActionRenderMode === "name"
+                  ? "name-only"
+                  : ""} ${hold.progress > 0 ? "holding" : ""} ${hold.completed ? "completed" : ""}"
                               data-kind="guest"
+                              data-role=${item.role ?? "toggle"}
                               data-state=${item.isOn ? "on" : "off"}
                               title=${item.requiresHold
                 ? t("actions.holdWithLabel", { seconds: holdSeconds, label: item.label })
@@ -2268,12 +2749,9 @@ export class TplinkRouterCard extends LitElement {
                   return;
                 }
                 this._invokeAction(item);
-              }}
+                              }}
                             >
-                              <ha-icon .icon=${item.icon}></ha-icon>
-                              ${item.band
-                ? html`<span class="band-badge">${item.band === "2g" ? "2.4" : item.band.replace("g", "")}</span>`
-                : ""}
+                              ${this._renderActionButtonContent(item, headerActionRenderMode)}
                             </button>
                           `;
           },
@@ -2283,7 +2761,7 @@ export class TplinkRouterCard extends LitElement {
         : ""}
               ${actionGroups.iot.length
         ? html`
-                    <div class="action-group" title=${t("actions.iot")}>
+                    <div class=${actionGroupClass} title=${t("actions.iot")}>
                       ${actionGroups.iot.map(
           (item) => {
             const hold = this._holdStates[item.entity_id] ?? {
@@ -2292,8 +2770,13 @@ export class TplinkRouterCard extends LitElement {
             };
             return html`
                             <button
-                              class="icon-toggle ${hold.progress > 0 ? "holding" : ""} ${hold.completed ? "completed" : ""}"
+                              class="icon-toggle ${headerActionRenderMode === "icon_name"
+                ? "with-label"
+                : headerActionRenderMode === "name"
+                  ? "name-only"
+                  : ""} ${hold.progress > 0 ? "holding" : ""} ${hold.completed ? "completed" : ""}"
                               data-kind="iot"
+                              data-role=${item.role ?? "toggle"}
                               data-state=${item.isOn ? "on" : "off"}
                               title=${item.requiresHold
                 ? t("actions.holdWithLabel", { seconds: holdSeconds, label: item.label })
@@ -2314,12 +2797,9 @@ export class TplinkRouterCard extends LitElement {
                   return;
                 }
                 this._invokeAction(item);
-              }}
+                              }}
                             >
-                              <ha-icon .icon=${item.icon}></ha-icon>
-                              ${item.band
-                ? html`<span class="band-badge">${item.band === "2g" ? "2.4" : item.band.replace("g", "")}</span>`
-                : ""}
+                              ${this._renderActionButtonContent(item, headerActionRenderMode)}
                             </button>
                           `;
           },
@@ -2329,7 +2809,7 @@ export class TplinkRouterCard extends LitElement {
         : ""}
               ${actionGroups.router.length
         ? html`
-                    <div class="action-group" title=${t("actions.router")}>
+                    <div class=${actionGroupClass} title=${t("actions.router")}>
                       ${actionGroups.router.map(
           (item) => {
             const hold = this._holdStates[item.entity_id] ?? {
@@ -2338,8 +2818,13 @@ export class TplinkRouterCard extends LitElement {
             };
             return html`
                             <button
-                              class="icon-toggle ${hold.progress > 0 ? "holding" : ""} ${hold.completed ? "completed" : ""}"
+                              class="icon-toggle ${headerActionRenderMode === "icon_name"
+                ? "with-label"
+                : headerActionRenderMode === "name"
+                  ? "name-only"
+                  : ""} ${hold.progress > 0 ? "holding" : ""} ${hold.completed ? "completed" : ""}"
                               data-kind="router"
+                              data-role=${item.role ?? "toggle"}
                               data-state=${item.isOn ? "on" : "off"}
                               title=${item.requiresHold
                 ? t("actions.holdWithLabel", { seconds: holdSeconds, label: item.label })
@@ -2360,9 +2845,9 @@ export class TplinkRouterCard extends LitElement {
                   return;
                 }
                 this._invokeAction(item);
-              }}
+                              }}
                             >
-                              <ha-icon .icon=${item.icon}></ha-icon>
+                              ${this._renderActionButtonContent(item, headerActionRenderMode)}
                             </button>
                           `;
           },
@@ -2378,13 +2863,14 @@ export class TplinkRouterCard extends LitElement {
               <span class="router-label">
                 ${entryId && localUrl
         ? html`
-                      ${t("card.routerLabel")}:
+                      ${endpointLabel}:
                       <a
                         class="router-link"
                         href=${localUrl}
                         target="_blank"
                         rel="noopener noreferrer"
                         title=${routerInfoText || localUrl}
+                        @click=${() => this._hapticTap()}
                       >
                         ${localUrl}
                       </a>
@@ -2432,7 +2918,7 @@ export class TplinkRouterCard extends LitElement {
         ? html`
                     <button
                       class="icon-button"
-                      title=${t("actions.router")}
+                      title=${routerActionTooltip}
                       @click=${() => {
             if (selectedRouterDeviceId) {
               this._openDevicePage(selectedRouterDeviceId);
@@ -2616,21 +3102,39 @@ export class TplinkRouterCard extends LitElement {
           : sorted.length === 0
             ? html`<div class="empty">${t("card.noDevices")}</div>`
             : html`
-                  <div class="table-wrapper">
+                  <div
+                    class="table-wrapper ${this._tableScrolledLeft
+                ? "table-wrapper--scrolled-left"
+                : ""} ${this._tableScrolledRight ? "table-wrapper--scrolled-right" : ""}"
+                    @scroll=${this._handleTableScroll}
+                  >
                     <table>
                       <thead>
                         <tr>
-                          ${displayColumns.map((col) => {
+                          ${fallbackColumnsWithLayout.map(({ col, fixed, name, max_width: maxWidth }) => {
               const index = activeSorts.findIndex((sort) => sort.key === col.key);
               const direction = index >= 0 ? activeSorts[index].direction : null;
+              const displayColumnLabel = name?.trim().length ? name.trim() : col.label;
+              const columnStyle = maxWidth ? `max-width:${maxWidth};` : "";
+              const applyEllipsis = Boolean(maxWidth && (fixed === undefined || col.key === "name"));
+              const thClasses = [
+                col.key === "actions" ? "actions-cell" : "",
+                fixed === "start" ? "sticky-start" : "",
+                fixed === "end" ? "sticky-end" : "",
+                fixed === "start" && col.key === lastStickyStartKey ? "sticky-start-edge" : "",
+                fixed === "end" && col.key === firstStickyEndKey ? "sticky-end-edge" : "",
+                applyEllipsis ? "column-ellipsis" : "",
+              ]
+                .filter((value) => value.length > 0)
+                .join(" ");
               return html`
-                              <th>
+                              <th class=${thClasses} data-col-key=${col.key} style=${columnStyle}>
                                 <button
                                   class="sort-button"
                                   aria-sort=${direction ? (direction === "asc" ? "ascending" : "descending") : "none"}
                                   @click=${(ev: MouseEvent) => this._toggleSort(ev, col.key)}
                                 >
-                                  <span>${col.label}</span>
+                                  <span>${displayColumnLabel}</span>
                                   ${direction
                   ? html`
                                         <span class="sort-indicator ${direction}">
@@ -2653,7 +3157,7 @@ export class TplinkRouterCard extends LitElement {
                 const isOffline = !row.isOnline;
                 const nameClickable = this._isNameClickable(row, entryDomain);
                 const showDeviceIcon = entryDomain === "tplink_router" && Boolean(row.deviceId);
-                const deviceTooltipLabel = `Device: ${row.name}`;
+                const deviceTooltipLabel = t("actions.goToDevice", { name: row.name });
                 const cells: Record<string, unknown> = {
                   name: nameClickable
                     ? html`
@@ -2781,9 +3285,15 @@ export class TplinkRouterCard extends LitElement {
                           };
                           return html`
                             <button
-                              class="icon-toggle row-action ${hold.progress > 0
+                              class="icon-toggle row-action ${rowActionRenderMode === "icon_name"
+                                ? "with-label"
+                                : rowActionRenderMode === "name"
+                                  ? "name-only"
+                                  : ""} ${hold.progress > 0
                                 ? "holding"
                                 : ""} ${hold.completed ? "completed" : ""}"
+                              data-role=${action.role ?? "toggle"}
+                              data-state=${action.isOn ? "on" : "off"}
                               title=${action.requiresHold
                                 ? t("actions.holdWithLabel", {
                                   seconds: holdSeconds,
@@ -2808,10 +3318,7 @@ export class TplinkRouterCard extends LitElement {
                                 this._invokeAction(action);
                               }}
                             >
-                              <ha-icon .icon=${action.icon}></ha-icon>
-                              ${action.band
-                                ? html`<span class="band-badge">${action.band === "2g" ? "2.4" : action.band.replace("g", "")}</span>`
-                                : ""}
+                              ${this._renderActionButtonContent(action, rowActionRenderMode)}
                             </button>
                           `;
                         })}
@@ -2831,29 +3338,44 @@ export class TplinkRouterCard extends LitElement {
                 };
                 return html`
                               <tr>
-                                ${displayColumns.map(
-                  (col) => {
+                                ${fallbackColumnsWithLayout.map(
+                  ({ col, fixed, max_width: maxWidth }) => {
                     const shiftEntityClickable = this._isShiftEntityCellClickable(
                       entryDomain,
                       col.key,
                       row,
                       entryId,
                     );
+                    const columnStyle = maxWidth ? `max-width:${maxWidth};` : "";
+                    const applyEllipsis = Boolean(maxWidth && (fixed === undefined || col.key === "name"));
+                    const applyEllipsisContainer = Boolean(maxWidth && fixed === undefined);
                     const tdClasses = [
                       col.key === "actions" ? "actions-cell" : "",
+                      fixed === "start" ? "sticky-start" : "",
+                      fixed === "end" ? "sticky-end" : "",
+                      fixed === "start" && col.key === lastStickyStartKey
+                        ? "sticky-start-edge"
+                        : "",
+                      fixed === "end" && col.key === firstStickyEndKey ? "sticky-end-edge" : "",
+                      applyEllipsisContainer ? "cell-ellipsis" : "",
                       shiftEntityClickable ? "shift-entity-clickable" : "",
                     ]
                       .filter((item) => item.length > 0)
                       .join(" ");
+                    const cellContentClass = applyEllipsis
+                      ? "cell-content cell-content-ellipsis"
+                      : "cell-content";
                     return html`
                       <td
                         class=${tdClasses}
+                        data-col-key=${col.key}
+                        style=${columnStyle}
                         @click=${(ev: MouseEvent) =>
                           shiftEntityClickable
                             ? this._handleShiftEntityCellClick(ev, row, col.key, entryId)
                             : undefined}
                       >
-                        ${cells[col.key]}
+                        <span class=${cellContentClass}>${cells[col.key]}</span>
                       </td>
                     `;
                   },
@@ -2916,7 +3438,7 @@ export class TplinkRouterCard extends LitElement {
     const getHass = () =>
       (document.querySelector("home-assistant") as { hass?: HomeAssistant } | null)?.hass;
     const t = (key: string) => localize(getHass(), key);
-    const columnOptions = ALL_COLUMN_KEYS.map((value) => ({
+    const columnOptions = ["name", ...ALL_COLUMN_KEYS].map((value) => ({
       value,
       label: t(`columns.${value}`),
     }));
@@ -2941,6 +3463,16 @@ export class TplinkRouterCard extends LitElement {
       { value: "online", label: t("filters.online") },
       { value: "offline", label: t("filters.offline") },
     ];
+    const actionRenderOptions = [
+      { value: "icon", label: t("editor.actionRenderIcon") },
+      { value: "name", label: t("editor.actionRenderName") },
+      { value: "icon_name", label: t("editor.actionRenderIconAndName") },
+    ];
+    const fixedColumnOptions = [
+      { value: COLUMN_FIXED_NONE, label: t("editor.columnFixedNone") },
+      { value: "start", label: t("editor.columnFixedStart") },
+      { value: "end", label: t("editor.columnFixedEnd") },
+    ];
     return {
       schema: [
         { name: "title", selector: { text: {} } },
@@ -2962,6 +3494,25 @@ export class TplinkRouterCard extends LitElement {
         },
         { name: "txrx_color", selector: { boolean: {} } },
         { name: "updown_color", selector: { boolean: {} } },
+        { name: "show_hidden_entities", selector: { boolean: {} } },
+        {
+          name: "header_action_render",
+          selector: {
+            select: {
+              mode: "dropdown",
+              options: actionRenderOptions,
+            },
+          },
+        },
+        {
+          name: "row_action_render",
+          selector: {
+            select: {
+              mode: "dropdown",
+              options: actionRenderOptions,
+            },
+          },
+        },
         { name: "shift_click_underline", selector: { boolean: {} } },
         { name: "hide_header", selector: { boolean: {} } },
         { name: "hide_filter_section", selector: { boolean: {} } },
@@ -3015,13 +3566,46 @@ export class TplinkRouterCard extends LitElement {
           },
         },
         {
-          name: "columns",
+          name: "column_layout",
           selector: {
-            select: {
+            object: {
               multiple: true,
-              mode: "dropdown",
-              sort: false,
-              options: columnOptions,
+              label_field: "key",
+              fields: {
+                key: {
+                  required: true,
+                  label: t("editor.columnLayoutKey"),
+                  selector: {
+                    select: {
+                      mode: "dropdown",
+                      sort: false,
+                      options: columnOptions,
+                    },
+                  },
+                },
+                fixed: {
+                  required: false,
+                  default: COLUMN_FIXED_NONE,
+                  label: t("editor.columnLayoutFixedOptional"),
+                  selector: {
+                    select: {
+                      mode: "dropdown",
+                      options: fixedColumnOptions,
+                    },
+                  },
+                },
+                name: {
+                  required: false,
+                  label: t("editor.columnLayoutNameOptional"),
+                  selector: { text: {} },
+                },
+                max_width: {
+                  required: false,
+                  label: t("editor.columnLayoutMaxWidthOptional"),
+                  description: t("editor.columnLayoutMaxWidthHelp"),
+                  selector: { text: {} },
+                },
+              },
             },
           },
         },
@@ -3038,6 +3622,12 @@ export class TplinkRouterCard extends LitElement {
             return t("editor.txrxColor");
           case "updown_color":
             return t("editor.updownColor");
+          case "show_hidden_entities":
+            return t("editor.showHiddenEntities");
+          case "header_action_render":
+            return t("editor.headerActionRender");
+          case "row_action_render":
+            return t("editor.rowActionRender");
           case "shift_click_underline":
             return t("editor.shiftClickUnderline");
           case "hide_header":
@@ -3054,21 +3644,27 @@ export class TplinkRouterCard extends LitElement {
             return t("editor.uploadSpeedColorMax");
           case "download_speed_color_max":
             return t("editor.downloadSpeedColorMax");
-          case "columns":
-            return t("editor.columns");
+          case "column_layout":
+            return t("editor.columnLayout");
           default:
             return schema.name ?? "";
         }
       },
       computeHelper: (schema: { name?: string }) => {
-        if (schema.name === "columns") {
-          return t("editor.columnsHelp");
+        if (schema.name === "column_layout") {
+          return t("editor.columnLayoutHelp");
         }
         if (schema.name === "txrx_color") {
           return t("editor.txrxColorHelp");
         }
         if (schema.name === "updown_color") {
           return t("editor.updownColorHelp");
+        }
+        if (schema.name === "show_hidden_entities") {
+          return t("editor.showHiddenEntitiesHelp");
+        }
+        if (schema.name === "header_action_render" || schema.name === "row_action_render") {
+          return t("editor.actionRenderHelp");
         }
         if (schema.name === "shift_click_underline") {
           return t("editor.shiftClickUnderlineHelp");
