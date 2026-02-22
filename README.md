@@ -2,6 +2,7 @@
 
 [![hacs_badge](https://img.shields.io/badge/HACS-Custom-orange.svg)](https://github.com/custom-components/hacs)
 [![GitHub Release](https://img.shields.io/github/release/hepter/ha-tplink-router-card.svg)](https://github.com/hepter/ha-tplink-router-card/releases)
+[![Downloads](https://img.shields.io/github/downloads/hepter/ha-tplink-router-card/latest/total.svg?label=Downloads)](https://github.com/hepter/ha-tplink-router-card/releases/latest)
 [![License](https://img.shields.io/github/license/hepter/ha-tplink-router-card.svg)](https://github.com/hepter/ha-tplink-router-card/blob/main/LICENSE)
 
 A Lovelace card for Home Assistant focused on TP-Link client monitoring and quick router controls.
