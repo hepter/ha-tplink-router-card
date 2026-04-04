@@ -538,7 +538,7 @@ export const cardStyles = css`
   thead {
     position: sticky;
     top: 0;
-    z-index: 1;
+    z-index: 3;
     background: var(--card-background-color);
     box-shadow: 0 1px 0 var(--divider-color);
   }

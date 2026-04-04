@@ -1240,9 +1240,20 @@ export class TplinkRouterCard extends LitElement {
     window.open(url, "_blank", "noopener,noreferrer");
   }
 
+  private _navigateInApp(path: string) {
+    this._hapticTap();
+    const maybeNavigate = (this.hass as unknown as { navigate?: (target: string) => void })
+      ?.navigate;
+    if (typeof maybeNavigate === "function") {
+      maybeNavigate(path);
+      return;
+    }
+    window.history.pushState(null, "", path);
+    window.dispatchEvent(new Event("location-changed"));
+  }
+
   private _openDevicePage(deviceId: string) {
-    const base = window.location.origin;
-    this._openUrl(`${base}/config/devices/device/${deviceId}`);
+    this._navigateInApp(`/config/devices/device/${deviceId}`);
   }
 
   private _isOmadaDomain(entryDomain: string | undefined) {
