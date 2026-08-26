@@ -344,6 +344,11 @@ Options:
     ```
 - `columns` (deprecated): legacy string-array format, kept only for backward compatibility.
 
+Status indicator colors follow Home Assistant's `--success-color` and `--error-color`
+theme variables. They can be overridden specifically for this card with
+`--tplink-router-card-online-color` and `--tplink-router-card-offline-color`.
+The fallback colors are green (`#3aa45b`) and red (`#d32f2f`).
+
 Rules:
 - Column order follows `column_layout` order.
 - Only columns valid for the selected integration domain are rendered.

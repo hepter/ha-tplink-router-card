@@ -12,6 +12,12 @@ import type { EntityRegistryEntry, HassEntity } from "../core/types";
 
 export const STATUS_ONLINE = new Set(["home", "on", "connected"]);
 
+const ONLINE_STATUS_COLOR = "var(--tplink-router-card-online-color, var(--success-color, #3aa45b))";
+const OFFLINE_STATUS_COLOR = "var(--tplink-router-card-offline-color, var(--error-color, #d32f2f))";
+
+export const getStatusColor = (isOnline: boolean) =>
+  isOnline ? ONLINE_STATUS_COLOR : OFFLINE_STATUS_COLOR;
+
 export type BandType = "2g" | "5g" | "6g" | "unknown";
 export type ConnectionType = "wifi" | "wired" | "iot" | "guest" | "unknown";
 export type LinkRateUnitHint = "auto" | "kbps";
@@ -428,7 +434,7 @@ export const mapTrackerStateToRow = (
     macNormalized: normalizeMac(mac),
     isOnline,
     statusValue: isOnline ? 1 : 0,
-    statusColor: isOnline ? "#3aa45b" : "#9aa0a6",
+    statusColor: getStatusColor(isOnline),
     connection,
     connectionType,
     band,

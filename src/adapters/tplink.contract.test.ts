@@ -138,6 +138,9 @@ describe("tplink adapter contract fixtures", () => {
 
     const row = mapTrackerStateToRow(state, "MBps", "auto");
     expect(row.isOnline).toBe(false);
+    expect(row.statusColor).toBe(
+      "var(--tplink-router-card-offline-color, var(--error-color, #d32f2f))",
+    );
     expect(row.connectionType).toBe("unknown");
     expect(row.bandType).toBe("unknown");
   });

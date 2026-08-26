@@ -7,6 +7,7 @@ import {
   safeString,
 } from "../utils/format";
 import {
+  getStatusColor,
   normalizeMac,
   signalColor,
   toNumber,
@@ -538,7 +539,7 @@ const buildRowFromDeviceOnlyStates = (
     ),
     isOnline: status.isOnline,
     statusValue: status.isOnline ? 1 : 0,
-    statusColor: status.isOnline ? "#3aa45b" : "#9aa0a6",
+    statusColor: getStatusColor(status.isOnline),
     connection: connectionLabel,
     connectionType: normalizedType === "—" ? "wired" : "unknown",
     band: "—",
@@ -744,7 +745,7 @@ export const mapOmadaStateToRow = (
     macNormalized: normalizeMac(mac),
     isOnline,
     statusValue: isOnline ? 1 : 0,
-    statusColor: isOnline ? "#3aa45b" : "#9aa0a6",
+    statusColor: getStatusColor(isOnline),
     connection,
     connectionType,
     band,

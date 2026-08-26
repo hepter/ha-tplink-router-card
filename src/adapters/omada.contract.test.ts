@@ -48,6 +48,9 @@ describe("omada adapter contract fixtures", () => {
 
     expect(row.connectionType).toBe("wifi");
     expect(row.bandType).toBe("5g");
+    expect(row.statusColor).toBe(
+      "var(--tplink-router-card-online-color, var(--success-color, #3aa45b))",
+    );
     expect(row.upSpeed).toBe("0.50 MB/s");
     expect(row.downSpeed).toBe("1.50 MB/s");
     expect(row.txRate).toBe("—");
