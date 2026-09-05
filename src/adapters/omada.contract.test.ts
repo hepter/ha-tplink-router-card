@@ -59,7 +59,7 @@ describe("omada adapter contract fixtures", () => {
     expect(row.signal).toBe("-52 dBm");
   });
 
-  it("keeps tplink_omada trackers selected even with minimal tracker attributes", () => {
+  it("keeps tplink_omada trackers selected even with minimal core tracker attributes", () => {
     const fixture = loadFixture<{
       entryId: string;
       states: Record<string, HassEntity>;
@@ -73,19 +73,211 @@ describe("omada adapter contract fixtures", () => {
       false,
     );
 
-    expect(trackers.map((item) => item.entity_id)).toEqual([
+    expect(trackers.map((item) => item.entity_id).sort()).toEqual([
+      "device_tracker.m11pc_away",
       "device_tracker.m11pc_wifi",
     ]);
 
-    const row = mapOmadaStateToRow(
+    const online = mapOmadaStateToRow(
       fixture.states["device_tracker.m11pc_wifi"],
       "MBps",
+      undefined,
+      { assumeWirelessClients: true },
     );
 
-    expect(row.name).toBe("VM Client WiFi");
-    expect(row.connectionType).toBe("wifi");
-    expect(row.ip).toBe("10.50.0.21");
-    expect(row.mac).toBe("02-50-00-00-00-21");
+    expect(online.name).toBe("VM Client WiFi");
+    expect(online.isOnline).toBe(true);
+    expect(online.connectionType).toBe("wifi");
+    expect(online.connection).toBe("WiFi");
+    expect(online.ip).toBe("10.50.0.21");
+    expect(online.mac).toBe("02:50:00:00:00:21");
+    expect(online.hostname).toBe("vm-client-01");
+    expect(online.apName).toBe("—");
+
+    const offline = mapOmadaStateToRow(
+      fixture.states["device_tracker.m11pc_away"],
+      "MBps",
+      undefined,
+      { assumeWirelessClients: true },
+    );
+    expect(offline.isOnline).toBe(false);
+    expect(offline.ip).toBe("—");
+    expect(offline.hostname).toBe("—");
+    expect(offline.connectionType).toBe("wifi");
+  });
+
+  it("falls back to wired for attribute-less trackers unless wireless clients are assumed", () => {
+    const fixture = loadFixture<{
+      states: Record<string, HassEntity>;
+    }>("tplink_omada_entry_minimal.json");
+    const row = mapOmadaStateToRow(fixture.states["device_tracker.m11pc_wifi"], "MBps");
+    expect(row.connectionType).toBe("wired");
+  });
+
+  it("builds tplink_omada rows as wireless clients when the option is passed through", () => {
+    const fixture = loadFixture<{
+      entryId: string;
+      states: Record<string, HassEntity>;
+      entityRegistry: EntityRegistryEntry[];
+    }>("tplink_omada_entry_minimal.json");
+
+    const rows = buildOmadaRows(
+      fixture.states,
+      fixture.entityRegistry,
+      [],
+      fixture.entryId,
+      false,
+      "MBps",
+      { assumeWirelessClients: true },
+    );
+    expect(rows.map((row) => row.connectionType)).toEqual(["wifi", "wifi"]);
+  });
+
+  it("maps ha-omada wireless client attributes into access point, channel and wifi mode columns", () => {
+    const fixture = loadFixture<{
+      speedUnit: "MBps" | "Mbps";
+      states: Record<string, HassEntity>;
+      expected: Record<string, Record<string, unknown>>;
+    }>("client_wifi_attributes.json");
+
+    const laptop = mapOmadaStateToRow(fixture.states["device_tracker.john_laptop"], fixture.speedUnit);
+    const expectedLaptop = fixture.expected["device_tracker.john_laptop"];
+    expect(laptop.connectionType).toBe(expectedLaptop.connectionType);
+    expect(laptop.bandType).toBe(expectedLaptop.bandType);
+    expect(laptop.apName).toBe(expectedLaptop.apName);
+    expect(laptop.apIsMainNode).toBe(false);
+    expect(laptop.channel).toBe(expectedLaptop.channel);
+    expect(laptop.channelValue).toBe(expectedLaptop.channelValue);
+    expect(laptop.wifiMode).toBe(expectedLaptop.wifiMode);
+    expect(laptop.wifiModeValue).toBe(expectedLaptop.wifiModeValue);
+    expect(laptop.lastSeen).toBe("—");
+
+    const watch = mapOmadaStateToRow(fixture.states["device_tracker.john_watch"], fixture.speedUnit);
+    const expectedWatch = fixture.expected["device_tracker.john_watch"];
+    expect(watch.isOnline).toBe(expectedWatch.isOnline);
+    expect(watch.lastSeenValue).toBe(expectedWatch.lastSeenValue);
+    expect(watch.lastSeen).not.toBe("—");
+
+    const ap = mapOmadaStateToRow(fixture.states["device_tracker.eap_hall"], fixture.speedUnit);
+    const expectedAp = fixture.expected["device_tracker.eap_hall"];
+    expect(ap.deviceType).toBe(expectedAp.deviceType);
+    expect(ap.deviceStatus).toBe(expectedAp.deviceStatus);
+    expect(ap.band).toBe(expectedAp.band);
+    expect(ap.bandType).toBe("unknown");
+  });
+
+  it("maps wifi_mode generations and last_seen in seconds or ISO form", () => {
+    const base: HassEntity = {
+      entity_id: "device_tracker.mode_client",
+      state: "home",
+      attributes: { source_type: "router", friendly_name: "Mode", wireless: true },
+    };
+    const modes: Array<[string, string, number | null]> = [
+      ["11b", "WiFi 1", 1],
+      ["11a", "WiFi 2", 2],
+      ["11g", "WiFi 3", 3],
+      ["11ng", "WiFi 4", 4],
+      ["11na", "WiFi 4", 4],
+      ["11ac", "WiFi 5", 5],
+      ["11axa", "WiFi 6", 6],
+      ["11axg", "WiFi 6", 6],
+      ["11bea", "WiFi 7", 7],
+      ["11beg", "WiFi 7", 7],
+      ["custom", "custom", null],
+    ];
+    for (const [raw, label, generation] of modes) {
+      const row = mapOmadaStateToRow(
+        { ...base, attributes: { ...base.attributes, wifi_mode: raw } },
+        "MBps",
+      );
+      expect(row.wifiMode, raw).toBe(label);
+      expect(row.wifiModeValue, raw).toBe(generation);
+    }
+
+    const seconds = mapOmadaStateToRow(
+      { ...base, state: "not_home", attributes: { ...base.attributes, last_seen: 1756800000 } },
+      "MBps",
+    );
+    expect(seconds.lastSeenValue).toBe(1756800000000);
+
+    const iso = mapOmadaStateToRow(
+      {
+        ...base,
+        state: "not_home",
+        attributes: { ...base.attributes, last_seen: "2026-09-02T08:00:00.000Z" },
+      },
+      "MBps",
+    );
+    expect(iso.lastSeenValue).toBe(Date.parse("2026-09-02T08:00:00.000Z"));
+  });
+
+  it("maps omada device status codes and categories to readable labels", () => {
+    const device = (attributes: Record<string, unknown>, state = "home"): HassEntity => ({
+      entity_id: "device_tracker.omada_device",
+      state,
+      attributes: { source_type: "router", friendly_name: "Device", type: "switch", ...attributes },
+    });
+    expect(mapOmadaStateToRow(device({ status_category: 1 }), "MBps").deviceStatus).toBe("Connected");
+    expect(mapOmadaStateToRow(device({ status_category: 3 }), "MBps").deviceStatus).toBe(
+      "Heartbeat Missed",
+    );
+    expect(mapOmadaStateToRow(device({ status: 11 }), "MBps").deviceStatus).toBe("Configuring");
+    expect(mapOmadaStateToRow(device({ status: 14 }), "MBps").deviceStatus).toBe("Connected");
+    expect(mapOmadaStateToRow(device({ status: "connected" }), "MBps").deviceStatus).toBe("connected");
+    expect(mapOmadaStateToRow(device({}, "not_home"), "MBps").deviceStatus).toBe("Disconnected");
+    expect(mapOmadaStateToRow(device({}), "MBps").deviceStatus).toBe("Connected");
+  });
+
+  it("keeps a leading asterisk in omada access point names", () => {
+    const state: HassEntity = {
+      entity_id: "device_tracker.starred",
+      state: "home",
+      attributes: { source_type: "router", friendly_name: "Starred", wireless: true, ap_name: "*Lab AP" },
+    };
+    const row = mapOmadaStateToRow(state, "MBps");
+    expect(row.apName).toBe("*Lab AP");
+    expect(row.apIsMainNode).toBe(false);
+  });
+
+  it("treats zone-name tracker states as online for omada rows", () => {
+    const state: HassEntity = {
+      entity_id: "device_tracker.zoned",
+      state: "Office",
+      attributes: { source_type: "router", friendly_name: "Zoned", wireless: true },
+    };
+    expect(mapOmadaStateToRow(state, "MBps").isOnline).toBe(true);
+    expect(mapOmadaStateToRow({ ...state, state: "unavailable" }, "MBps").isOnline).toBe(false);
+  });
+
+  it("does not sniff tplink_router trackers as omada just because they carry ap_name", () => {
+    const states: Record<string, HassEntity> = {
+      "device_tracker.mesh_client": {
+        entity_id: "device_tracker.mesh_client",
+        state: "home",
+        attributes: {
+          source_type: "router",
+          friendly_name: "Mesh Client",
+          connection: "host",
+          band: "5G",
+          packets_sent: 1,
+          packets_received: 1,
+          ap_name: "AX55 node",
+        },
+      },
+      "device_tracker.omada_client": {
+        entity_id: "device_tracker.omada_client",
+        state: "home",
+        attributes: {
+          source_type: "router",
+          friendly_name: "Omada Client",
+          wireless: true,
+          ssid: "Home",
+          ap_name: "EAP670",
+        },
+      },
+    };
+    const selected = selectOmadaTrackers(states, [], "entry-omada", true);
+    expect(selected.map((item) => item.entity_id)).toEqual(["device_tracker.omada_client"]);
   });
 
   it("infers wired connection from switch fields and maps device metadata columns", () => {

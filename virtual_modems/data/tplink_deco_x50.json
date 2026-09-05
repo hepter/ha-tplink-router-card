@@ -1,27 +1,73 @@
 {
   "decos": [
     {
-      "mac": "02:68:50:AA:10:01",
-      "name": "Deco-X50-Master",
+      "mac": "02:56:4D:02:00:01",
+      "name": "Virtual Deco Master",
+      "custom_nickname": null,
       "role": "master",
       "device_model": "Deco X50",
       "hardware_ver": "1.3",
-      "software_ver": "1.0.17 Build 20260118 Rel.10220",
+      "software_ver": "1.0.17 Build 20260118 Rel.10220 (virtual)",
       "master": true,
       "online": true,
       "ip_address": "10.68.0.1",
       "connection_type": "wired",
       "internet_online": true,
+      "inet_status": "online",
       "signal_band2_4": 0,
       "signal_band5": 0,
-      "bssid_band2_4": "02:68:50:AA:10:11",
-      "bssid_band5": "02:68:50:AA:10:12"
+      "bssid_band2_4": "02:56:4D:02:00:11",
+      "bssid_band5": "02:56:4D:02:00:12",
+      "backhaul_speed": 1000,
+      "backhaul_max_speed": 1000
+    },
+    {
+      "mac": "02:56:4D:02:00:02",
+      "name": "Virtual Deco Bedroom",
+      "custom_nickname": "Virtual Deco Bedroom",
+      "role": "slave",
+      "device_model": "Deco X50",
+      "hardware_ver": "1.3",
+      "software_ver": "1.0.17 Build 20260118 Rel.10220 (virtual)",
+      "master": false,
+      "online": true,
+      "ip_address": "10.68.0.2",
+      "connection_type": ["band5"],
+      "internet_online": null,
+      "inet_status": null,
+      "signal_band2_4": 3,
+      "signal_band5": 4,
+      "bssid_band2_4": "02:56:4D:02:00:21",
+      "bssid_band5": "02:56:4D:02:00:22",
+      "backhaul_speed": 866,
+      "backhaul_max_speed": 1200
+    },
+    {
+      "mac": "02:56:4D:02:00:03",
+      "name": "Virtual Deco Study",
+      "custom_nickname": null,
+      "role": "slave",
+      "device_model": "Deco X50",
+      "hardware_ver": "1.3",
+      "software_ver": "1.0.17 Build 20260118 Rel.10220 (virtual)",
+      "master": false,
+      "online": true,
+      "ip_address": "10.68.0.3",
+      "connection_type": "wired",
+      "internet_online": true,
+      "inet_status": "connected",
+      "signal_band2_4": 0,
+      "signal_band5": 0,
+      "bssid_band2_4": "02:56:4D:02:00:31",
+      "bssid_band5": "02:56:4D:02:00:32",
+      "backhaul_speed": 1000,
+      "backhaul_max_speed": 1000
     }
   ],
   "network": {
     "wan": {
       "ip_info": {
-        "mac": "02:68:50:AA:10:01",
+        "mac": "02:56:4D:02:00:01",
         "ip": "100.90.22.31",
         "gateway": "100.90.22.1",
         "mask": "255.255.255.0",
@@ -32,15 +78,15 @@
     },
     "lan": {
       "ip_info": {
-        "mac": "02:68:50:AA:10:01",
+        "mac": "02:56:4D:02:00:01",
         "ip": "10.68.0.1",
         "mask": "255.255.255.0"
       }
     }
   },
   "performance": {
-    "cpu_usage": 14,
-    "mem_usage": 28
+    "cpu_usage": 0.14,
+    "mem_usage": 0.28
   },
   "wireless": {
     "band2_4": {
@@ -70,8 +116,44 @@
   },
   "clients": [
     {
-      "name": "dm0tcGhvbmUtbWFpbi1kNHA=",
-      "mac": "0A-DE-50-00-00-04",
+      "name": "vm-workstation-lan",
+      "mac": "02:56:4D:02:10:01",
+      "ip": "10.68.0.21",
+      "online": true,
+      "wire_type": "wired",
+      "connection_type": "wired",
+      "interface": "main",
+      "up_kilobytes_per_s": 4200,
+      "down_kilobytes_per_s": 26800,
+      "deco_mac": "02:56:4D:02:00:01"
+    },
+    {
+      "name": "vm-nas-lan",
+      "mac": "02:56:4D:02:10:02",
+      "ip": "10.68.0.22",
+      "online": true,
+      "wire_type": "wired",
+      "connection_type": "wired",
+      "interface": "main",
+      "up_kilobytes_per_s": 7600,
+      "down_kilobytes_per_s": 9800,
+      "deco_mac": "02:56:4D:02:00:01"
+    },
+    {
+      "name": "vm-printer-lan",
+      "mac": "02:56:4D:02:10:03",
+      "ip": "10.68.0.23",
+      "online": true,
+      "wire_type": "wired",
+      "connection_type": "wired",
+      "interface": "main",
+      "up_kilobytes_per_s": 12,
+      "down_kilobytes_per_s": 35,
+      "deco_mac": "02:56:4D:02:00:01"
+    },
+    {
+      "name": "vm-phone-main",
+      "mac": "02:56:4D:02:10:04",
       "ip": "10.68.0.31",
       "online": true,
       "wire_type": "wireless",
@@ -79,35 +161,11 @@
       "interface": "main",
       "up_kilobytes_per_s": 820,
       "down_kilobytes_per_s": 13240,
-      "deco_mac": "02:68:50:AA:10:01"
+      "deco_mac": "02:56:4D:02:00:01"
     },
     {
-      "name": "dm0tZ3Vlc3QtcGhvbmUtZDRw",
-      "mac": "0A-DE-50-00-00-0C",
-      "ip": "10.68.0.41",
-      "online": true,
-      "wire_type": "wireless",
-      "connection_type": "band5",
-      "interface": "guest",
-      "up_kilobytes_per_s": 0,
-      "down_kilobytes_per_s": 0,
-      "deco_mac": "02:68:50:AA:10:01"
-    },
-    {
-      "name": "dm0td29ya3N0YXRpb24tbGFuLWQ0cA==",
-      "mac": "0A-DE-50-00-00-01",
-      "ip": "10.68.0.21",
-      "online": true,
-      "wire_type": "wired",
-      "connection_type": "wired",
-      "interface": "main",
-      "up_kilobytes_per_s": 0,
-      "down_kilobytes_per_s": 0,
-      "deco_mac": "02:68:50:AA:10:01"
-    },
-    {
-      "name": "dm0tdGFibGV0LTZnLWQ0cA==",
-      "mac": "0A-DE-50-00-00-05",
+      "name": "vm-tablet-6g",
+      "mac": "02:56:4D:02:10:05",
       "ip": "10.68.0.32",
       "online": true,
       "wire_type": "wireless",
@@ -115,11 +173,11 @@
       "interface": "main",
       "up_kilobytes_per_s": 620,
       "down_kilobytes_per_s": 8640,
-      "deco_mac": "02:68:50:AA:10:01"
+      "deco_mac": "02:56:4D:02:00:01"
     },
     {
-      "name": "dm0tdHYtbG91bmdlLWQ0cA==",
-      "mac": "0A-DE-50-00-00-06",
+      "name": "vm-tv-lounge",
+      "mac": "02:56:4D:02:10:06",
       "ip": "10.68.0.33",
       "online": true,
       "wire_type": "wireless",
@@ -127,59 +185,71 @@
       "interface": "main",
       "up_kilobytes_per_s": 540,
       "down_kilobytes_per_s": 24800,
-      "deco_mac": "02:68:50:AA:10:01"
+      "deco_mac": "02:56:4D:02:00:01"
     },
     {
-      "name": "dm0tY2FtLWZyb250ZG9vci1kNHA=",
-      "mac": "0A-DE-50-00-00-07",
-      "ip": "10.68.0.34",
+      "name": "vm-guest-phone",
+      "mac": "02:56:4D:02:10:07",
+      "ip": "10.68.0.41",
       "online": true,
       "wire_type": "wireless",
-      "connection_type": "band2_4",
-      "interface": "iot",
-      "up_kilobytes_per_s": 90,
-      "down_kilobytes_per_s": 110,
-      "deco_mac": "02:68:50:AA:10:01"
+      "connection_type": "band5",
+      "interface": "guest",
+      "up_kilobytes_per_s": 310,
+      "down_kilobytes_per_s": 2600,
+      "deco_mac": "02:56:4D:02:00:01"
     },
     {
-      "name": "dm0taW90LWxvY2stZDRw",
-      "mac": "0A-DE-50-00-00-08",
-      "ip": "10.68.0.35",
+      "name": "vm-iot-lock",
+      "mac": "02:56:4D:02:10:08",
+      "ip": "10.68.0.51",
       "online": true,
       "wire_type": "wireless",
       "connection_type": "band2_4",
       "interface": "iot",
       "up_kilobytes_per_s": 8,
       "down_kilobytes_per_s": 12,
-      "deco_mac": "02:68:50:AA:10:01"
+      "deco_mac": "02:56:4D:02:00:01"
     },
     {
-      "name": "dm0tcHJpbnRlci1sYW4tZDRw",
-      "mac": "0A-DE-50-00-00-02",
-      "ip": "10.68.0.22",
+      "name": "vm-laptop-bedroom",
+      "mac": "02:56:4D:02:10:09",
+      "ip": "10.68.0.34",
       "online": true,
-      "wire_type": "wired",
-      "connection_type": "wired",
+      "wire_type": "wireless",
+      "connection_type": "band5",
       "interface": "main",
-      "up_kilobytes_per_s": 12,
-      "down_kilobytes_per_s": 35,
-      "deco_mac": "02:68:50:AA:10:01"
+      "up_kilobytes_per_s": 1450,
+      "down_kilobytes_per_s": 18600,
+      "deco_mac": "02:56:4D:02:00:02"
     },
     {
-      "name": "dm0tbmFzLWxhbi1kNHA=",
-      "mac": "0A-DE-50-00-00-03",
-      "ip": "10.68.0.23",
+      "name": "vm-speaker-mini",
+      "mac": "02:56:4D:02:10:0A",
+      "ip": "10.68.0.52",
+      "online": false,
+      "wire_type": "wireless",
+      "connection_type": "band2_4",
+      "interface": "iot",
+      "up_kilobytes_per_s": 0,
+      "down_kilobytes_per_s": 0,
+      "deco_mac": "02:56:4D:02:00:02"
+    },
+    {
+      "name": "vm-cam-frontdoor",
+      "mac": "02:56:4D:02:10:0B",
+      "ip": "10.68.0.53",
       "online": true,
-      "wire_type": "wired",
-      "connection_type": "wired",
-      "interface": "main",
-      "up_kilobytes_per_s": 7600,
-      "down_kilobytes_per_s": 9800,
-      "deco_mac": "02:68:50:AA:10:01"
+      "wire_type": "wireless",
+      "connection_type": "band2_4",
+      "interface": "iot",
+      "up_kilobytes_per_s": 90,
+      "down_kilobytes_per_s": 110,
+      "deco_mac": "02:56:4D:02:00:02"
     },
     {
-      "name": "dm0tbGFwdG9wLWd1ZXN0LWQ0cA==",
-      "mac": "0A-DE-50-00-00-0D",
+      "name": "vm-guest-laptop",
+      "mac": "02:56:4D:02:10:0C",
       "ip": "10.68.0.42",
       "online": true,
       "wire_type": "wireless",
@@ -187,11 +257,23 @@
       "interface": "guest",
       "up_kilobytes_per_s": 900,
       "down_kilobytes_per_s": 4200,
-      "deco_mac": "02:68:50:AA:10:01"
+      "deco_mac": "02:56:4D:02:00:02"
     },
     {
-      "name": "dm0tY29uc29sZS1kNHA=",
-      "mac": "0A-DE-50-00-00-09",
+      "name": "vm-phone-old",
+      "mac": "02:56:4D:02:10:0D",
+      "ip": "10.68.0.35",
+      "online": false,
+      "wire_type": "wireless",
+      "connection_type": "band2_4",
+      "interface": "main",
+      "up_kilobytes_per_s": 0,
+      "down_kilobytes_per_s": 0,
+      "deco_mac": "02:56:4D:02:00:02"
+    },
+    {
+      "name": "vm-console",
+      "mac": "02:56:4D:02:10:0E",
       "ip": "10.68.0.36",
       "online": true,
       "wire_type": "wireless",
@@ -199,31 +281,31 @@
       "interface": "main",
       "up_kilobytes_per_s": 1600,
       "down_kilobytes_per_s": 5400,
-      "deco_mac": "02:68:50:AA:10:01"
+      "deco_mac": "02:56:4D:02:00:03"
     },
     {
-      "name": "dm0tc3BlYWtlci1taW5pLWQ0cA==",
-      "mac": "0A-DE-50-00-00-0A",
-      "ip": "10.68.0.37",
-      "online": false,
+      "name": "vm-desktop-study",
+      "mac": "02:56:4D:02:10:0F",
+      "ip": "10.68.0.24",
+      "online": true,
+      "wire_type": "wired",
+      "connection_type": "wired",
+      "interface": "main",
+      "up_kilobytes_per_s": 3100,
+      "down_kilobytes_per_s": 41200,
+      "deco_mac": "02:56:4D:02:00:03"
+    },
+    {
+      "name": "vm-iot-thermostat",
+      "mac": "02:56:4D:02:10:10",
+      "ip": "10.68.0.54",
+      "online": true,
       "wire_type": "wireless",
       "connection_type": "band2_4",
       "interface": "iot",
-      "up_kilobytes_per_s": 0,
-      "down_kilobytes_per_s": 0,
-      "deco_mac": "02:68:50:AA:10:01"
-    },
-    {
-      "name": "dm0tcGhvbmUtb2xkLWQ0cA==",
-      "mac": "0A-DE-50-00-00-0B",
-      "ip": "10.68.0.38",
-      "online": false,
-      "wire_type": "wireless",
-      "connection_type": "band5",
-      "interface": "main",
-      "up_kilobytes_per_s": 0,
-      "down_kilobytes_per_s": 0,
-      "deco_mac": "02:68:50:AA:10:01"
+      "up_kilobytes_per_s": 5,
+      "down_kilobytes_per_s": 9,
+      "deco_mac": "02:56:4D:02:00:03"
     }
   ]
 }

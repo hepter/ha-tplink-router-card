@@ -14,6 +14,26 @@ from fastapi.responses import HTMLResponse, JSONResponse
 
 from .request_logging import install_request_logging
 
+VPN_LIST_SLUGS = {
+    "client-to-site-vpn-servers",
+    "client-to-site-vpn-clients",
+    "site-to-site-vpns",
+}
+
+WIRELESS_ONLY_KEYS = (
+    "apMac",
+    "apName",
+    "ssid",
+    "radioId",
+    "channel",
+    "wifiMode",
+    "rssi",
+    "snr",
+    "signalLevel",
+    "signalRank",
+    "powerSave",
+)
+
 
 def _load_fixture() -> dict[str, Any]:
     file_path = Path(__file__).resolve().parents[1] / "data" / "omada_controller.json"
@@ -29,12 +49,27 @@ def _index_by_mac(items: list[dict[str, Any]]) -> dict[str, dict[str, Any]]:
     return {_normalize_mac(item["mac"]): copy.deepcopy(item) for item in items if "mac" in item}
 
 
+def _parse_version(value: str) -> tuple[int, int, int, int]:
+    parts: list[int] = []
+    for chunk in str(value).split("."):
+        digits = "".join(char for char in chunk if char.isdigit())
+        parts.append(int(digits) if digits else 0)
+    parts.extend([0, 0, 0, 0])
+    return tuple(parts[:4])  # type: ignore[return-value]
+
+
 class OmadaControllerMock:
     def __init__(self) -> None:
         self.fixture = _load_fixture()
         self.controller = self.fixture["controller"]
         self.username = os.getenv("VMODEM_OMADA_USERNAME", "admin")
         self.password = os.getenv("VMODEM_OMADA_PASSWORD", "admin")
+
+        override = os.getenv("VMODEM_OMADA_VERSION", "").strip()
+        self.version = override or str(self.controller.get("version", "5.15.8"))
+        self.version_tuple = _parse_version(self.version)
+        # ha-omada switches to /openapi/v2 client listing at 6.0.0, core tplink_omada at 6.2.0.
+        self.supports_openapi_v2 = self.version_tuple >= (6, 0, 0, 0)
 
         self.devices = copy.deepcopy(self.fixture.get("devices", []))
         self.clients = copy.deepcopy(self.fixture.get("clients", []))
@@ -99,24 +134,32 @@ class OmadaControllerMock:
                 return device
         return None
 
+    def _virtual_mac(self, mac: str) -> str:
+        cleaned = "".join(char for char in mac if char.isalnum()).upper()
+        suffix = cleaned[-4:].rjust(4, "0")
+        return f"02:56:4D:03:{suffix[:2]}:{suffix[2:]}"
+
     def _ensure_client(self, mac: str) -> dict[str, Any]:
         norm = _normalize_mac(mac)
         for client in self.clients:
             if _normalize_mac(str(client.get("mac", ""))) == norm:
                 return client
 
+        virtual_mac = self._virtual_mac(mac)
+        label = f"vm-adhoc-{virtual_mac[-5:].replace(':', '')}".lower()
         fallback = copy.deepcopy(self.clients[0]) if self.clients else {}
         fallback.update(
             {
-                "mac": mac.upper(),
-                "name": fallback.get("name") or f"client-{mac[-5:]}",
-                "hostName": fallback.get("hostName") or f"client-{mac[-5:]}",
+                "mac": virtual_mac,
+                "name": label,
+                "hostName": label,
                 "active": True,
                 "wireless": True,
                 "guest": False,
-                "connectType": "wireless_user",
+                "connectType": 1,
                 "connectDevType": "ap",
-                "ip": fallback.get("ip") or "10.50.0.250",
+                "ip": "192.168.60.250",
+                "blocked": False,
                 "lastSeen": int(time.time() * 1000),
             }
         )
@@ -126,11 +169,12 @@ class OmadaControllerMock:
             known = copy.deepcopy(self.known_clients[0]) if self.known_clients else {}
             known.update(
                 {
-                    "mac": mac.upper(),
-                    "name": fallback.get("name"),
-                    "wireless": bool(fallback.get("wireless", True)),
-                    "guest": bool(fallback.get("guest", False)),
+                    "mac": virtual_mac,
+                    "name": label,
+                    "wireless": True,
+                    "guest": False,
                     "block": False,
+                    "blocked": False,
                     "lastSeen": int(time.time() * 1000),
                 }
             )
@@ -147,17 +191,19 @@ class OmadaControllerMock:
 
         template = next((item for item in self.devices if item.get("type") == dev_type), None)
         device = copy.deepcopy(template) if template else {}
+        virtual_mac = self._virtual_mac(mac)
         device.update(
             {
-                "mac": mac.upper(),
+                "mac": virtual_mac,
                 "type": dev_type,
-                "name": device.get("name") or f"Virtual {dev_type.title()}",
+                "name": f"Virtual Adhoc {dev_type.title()} {virtual_mac[-5:]}",
                 "model": device.get("model") or f"Virtual-{dev_type.upper()}",
-                "showModel": device.get("showModel") or f"Virtual-{dev_type.upper()}",
+                "showModel": device.get("showModel") or f"Virtual {dev_type.upper()}",
                 "compoundModel": device.get("compoundModel") or f"Virtual {dev_type.title()}",
-                "ip": device.get("ip") or "10.50.0.250",
-                "status": int(device.get("status", 1) or 1),
-                "statusCategory": int(device.get("statusCategory", 0) or 0),
+                "firmwareVersion": f"{device.get('firmwareVersion', '1.0.0')}".split(" ")[0] + " (virtual)",
+                "ip": device.get("ip") or "192.168.1.250",
+                "status": int(device.get("status", 14) or 14),
+                "statusCategory": int(device.get("statusCategory", 1) or 1),
                 "needUpgrade": bool(device.get("needUpgrade", False)),
             }
         )
@@ -172,7 +218,7 @@ class OmadaControllerMock:
                 {
                     "id": f"wlan-{idx}",
                     "wlanId": f"wlan-{idx}",
-                    "name": f"{ap.get('name', 'AP')} WLAN",
+                    "name": f"{ap.get('name', 'Virtual AP')} WLAN",
                 }
             )
         return wlans
@@ -187,7 +233,7 @@ class OmadaControllerMock:
                     names.add(name.strip())
 
         if not names:
-            names = {"Main-2.4G", "Main-5G", "Guest-5G"}
+            names = {"MainNet 2.4G", "MainNet 5G", "GuestNet 5G"}
 
         sorted_names = sorted(names)
         return [{"id": f"{wlan_id}-{idx+1}", "name": ssid} for idx, ssid in enumerate(sorted_names)]
@@ -208,19 +254,38 @@ class OmadaControllerMock:
             return self._not_found("site not found")
         return None
 
-    def _paginate(self, items: list[dict[str, Any]], request: Request) -> dict[str, Any]:
-        q = request.query_params
-        page = int(q.get("currentPage", "1") or "1")
-        size = int(q.get("currentPageSize", "100") or "100")
-        start = max(0, (page - 1) * size)
-        end = start + size
-        sliced = items[start:end]
+    def _require_openapi_site(self, controller_id: str, site: str) -> JSONResponse | None:
+        if not self.supports_openapi_v2:
+            return JSONResponse(
+                {"errorCode": -44112, "msg": f"openapi v2 unavailable on controller {self.version}"},
+                status_code=404,
+            )
+        return self._require_controller_site(controller_id, site)
+
+    def _page_envelope(self, items: list[dict[str, Any]], page: int, size: int) -> dict[str, Any]:
+        page = max(1, page)
+        size = max(1, size)
+        start = (page - 1) * size
+        sliced = items[start : start + size]
         return {
             "data": sliced,
             "currentPage": page,
-            "currentSize": len(sliced),
+            # Real controllers echo the effective page size here; the paging loops in both
+            # clients divide by it, so returning len(sliced) makes them re-request forever.
+            "currentSize": size,
             "totalRows": len(items),
         }
+
+    def _paginate(self, items: list[dict[str, Any]], request: Request) -> dict[str, Any]:
+        q = request.query_params
+        page = int(q.get("currentPage", q.get("page", "1")) or "1")
+        size = int(q.get("currentPageSize", q.get("pageSize", "100")) or "100")
+        return self._page_envelope(items, page, size)
+
+    def _paginate_body(self, items: list[dict[str, Any]], payload: dict[str, Any]) -> dict[str, Any]:
+        page = int(payload.get("page", 1) or 1)
+        size = int(payload.get("pageSize", 100) or 100)
+        return self._page_envelope(items, page, size)
 
     def _is_client_active(self, client: dict[str, Any]) -> bool:
         base_active = bool(client.get("active", False))
@@ -270,58 +335,96 @@ class OmadaControllerMock:
             known_items.append(current)
         return known_items
 
+    def _runtime_devices(self) -> list[dict[str, Any]]:
+        runtime_clients = [item for item in self._runtime_clients() if item.get("active")]
+        devices: list[dict[str, Any]] = []
+
+        for device in self.devices:
+            current = copy.deepcopy(device)
+            norm = _normalize_mac(str(current.get("mac", "")))
+            dev_type = current.get("type")
+
+            if dev_type == "ap":
+                attached = [c for c in runtime_clients if _normalize_mac(str(c.get("apMac", ""))) == norm]
+                current["clientNum"] = len(attached)
+                current["clientNum2g"] = sum(1 for c in attached if c.get("radioId") == 0)
+                current["clientNum5g"] = sum(1 for c in attached if c.get("radioId") in (1, 2))
+                current["clientNum6g"] = sum(1 for c in attached if c.get("radioId") == 3)
+                current["guestNum"] = sum(1 for c in attached if c.get("guest"))
+                current["userNum"] = current["clientNum"] - current["guestNum"]
+            elif dev_type == "switch":
+                attached = [c for c in runtime_clients if _normalize_mac(str(c.get("switchMac", ""))) == norm]
+                current["clientNum"] = len(attached)
+                current["userNum"] = len(attached)
+            elif dev_type == "gateway":
+                current["clientNum"] = len(runtime_clients)
+                current["guestNum"] = sum(1 for c in runtime_clients if c.get("guest"))
+                current["userNum"] = current["clientNum"] - current["guestNum"]
+                current["clientNum2g"] = sum(1 for c in runtime_clients if c.get("radioId") == 0)
+                current["clientNum5g"] = sum(1 for c in runtime_clients if c.get("radioId") in (1, 2))
+                current["clientNum6g"] = sum(1 for c in runtime_clients if c.get("radioId") == 3)
+
+            if int(current.get("statusCategory", 0)) == 1:
+                current["cpuUtil"] = max(0, min(99, int(current.get("cpuUtil", 10)) + self._rand.randint(-4, 4)))
+                current["memUtil"] = max(0, min(99, int(current.get("memUtil", 30)) + self._rand.randint(-3, 3)))
+                current["uptimeLong"] = int(current.get("uptimeLong", 0)) + self._rand.randint(1, 30)
+
+            devices.append(current)
+        return devices
+
     def _randomize_client_metrics(self, client: dict[str, Any]) -> None:
         wireless = bool(client.get("wireless", False))
         active = bool(client.get("active", False))
 
         if wireless:
-            rx_rate = self._rand.randint(65, 2401)
-            tx_rate = self._rand.randint(65, 1801)
-            signal = self._rand.randint(2, 5) if active else self._rand.randint(1, 3)
-            rssi = self._rand.randint(-82, -36) if active else self._rand.randint(-94, -78)
-            snr = self._rand.randint(14, 44) if active else self._rand.randint(3, 14)
+            radio_id = int(client.get("radioId", 0) or 0)
+            ceiling = {0: 574, 1: 1201, 2: 2402, 3: 4324}.get(radio_id, 866)
+            rx_rate = self._rand.randint(max(6, ceiling // 8), ceiling)
+            tx_rate = max(6, int(rx_rate * self._rand.uniform(0.5, 0.98)))
+            rssi = self._rand.randint(-78, -34) if active else self._rand.randint(-94, -76)
+            client["rssi"] = rssi
+            client["snr"] = self._rand.randint(14, 46) if active else self._rand.randint(3, 14)
+            client["signalLevel"] = max(0, min(5, (rssi + 92) // 11))
+            client["signalRank"] = max(0, min(3, client["signalLevel"] - 2))
+            client["powerSave"] = bool(not active or self._rand.random() > 0.62)
         else:
-            rx_rate = self._rand.randint(940, 1000)
-            tx_rate = self._rand.randint(940, 1000)
-            signal = None
-            rssi = None
-            snr = None
+            rx_rate = int(client.get("rxRate", 1000) or 1000)
+            tx_rate = int(client.get("txRate", 1000) or 1000)
+            for key in WIRELESS_ONLY_KEYS:
+                client.pop(key, None)
 
-        traffic_down = float(client.get("trafficDown") or 0.0)
-        traffic_up = float(client.get("trafficUp") or 0.0)
+        traffic_down = int(client.get("trafficDown") or 0)
+        traffic_up = int(client.get("trafficUp") or 0)
         duration = int(client.get("uptime") or 0)
         packet_down = int(client.get("downPacket") or 0)
         packet_up = int(client.get("upPacket") or 0)
 
         if active:
-            traffic_down += self._rand.uniform(0.04, 9.8)
-            traffic_up += self._rand.uniform(0.02, 6.2)
+            traffic_down += self._rand.randint(4_000, 9_800_000)
+            traffic_up += self._rand.randint(2_000, 6_200_000)
             duration += self._rand.randint(1, 20)
             packet_down += self._rand.randint(10, 900)
             packet_up += self._rand.randint(10, 700)
 
         client["rxRate"] = rx_rate
         client["txRate"] = tx_rate
-        client["signalLevel"] = signal
-        client["rssi"] = rssi
-        client["snr"] = snr
-        client["trafficDown"] = round(max(0.0, traffic_down), 3)
-        client["trafficUp"] = round(max(0.0, traffic_up), 3)
+        client["trafficDown"] = max(0, traffic_down)
+        client["trafficUp"] = max(0, traffic_up)
         client["uptime"] = max(0, duration)
         client["downPacket"] = max(0, packet_down)
         client["upPacket"] = max(0, packet_up)
-        client["activity"] = bool(active and self._rand.random() > 0.08)
-        client["powerSave"] = bool(not active or self._rand.random() > 0.62)
+        # Omada reports activity as a realtime downlink rate in Byte/s, not a flag.
+        client["activity"] = self._rand.randint(0, 2_400_000) if active else 0
 
     def _randomize_known_client_metrics(self, client: dict[str, Any]) -> None:
-        download = float(client.get("download") or 0.0)
-        upload = float(client.get("upload") or 0.0)
+        download = int(client.get("download") or 0)
+        upload = int(client.get("upload") or 0)
         duration = int(client.get("duration") or 0)
-        download += self._rand.uniform(0.0, 3.2)
-        upload += self._rand.uniform(0.0, 2.4)
+        download += self._rand.randint(0, 3_200_000)
+        upload += self._rand.randint(0, 2_400_000)
         duration += self._rand.randint(0, 14)
-        client["download"] = round(max(0.0, download), 3)
-        client["upload"] = round(max(0.0, upload), 3)
+        client["download"] = max(0, download)
+        client["upload"] = max(0, upload)
         client["duration"] = max(0, duration)
 
     def _match_device(self, mac: str) -> dict[str, Any]:
@@ -377,6 +480,74 @@ class OmadaControllerMock:
                 return item
         raise KeyError(f"{mac}:{port}")
 
+    def _device_firmware(self, mac: str) -> dict[str, Any]:
+        device = self._find_device(mac)
+        current = str((device or {}).get("firmwareVersion", "1.0.0 (virtual)"))
+        base = current.split(" ")[0]
+        head, _, tail = base.rpartition(".")
+        try:
+            latest = f"{head}.{int(tail) + 2}" if head else base
+        except ValueError:
+            latest = base
+        upgradable = bool((device or {}).get("needUpgrade", False))
+        return {
+            "curFwVer": current,
+            "lastFwVer": f"{latest} (virtual)" if upgradable else current,
+            "fwReleaseLog": "Virtual firmware changelog for the emulated Omada controller",
+        }
+
+    def _build_topology(self) -> dict[str, Any]:
+        devices = {_normalize_mac(str(d.get("mac", ""))): d for d in self._runtime_devices()}
+
+        def node(device: dict[str, Any]) -> dict[str, Any]:
+            payload = {
+                "type": device.get("type"),
+                "mac": device.get("mac"),
+                "name": device.get("name"),
+                "model": device.get("model"),
+                "ip": device.get("ip"),
+                "status": device.get("status"),
+                "statusCategory": device.get("statusCategory"),
+                "disconnected": int(device.get("statusCategory", 0)) != 1,
+                "clientCount": int(device.get("clientNum", 0)),
+                "successors": [],
+            }
+            uplink = device.get("uplink")
+            if isinstance(uplink, str) and uplink:
+                payload["wiredUpInfo"] = {
+                    "upLinkPort": {"port": "2"},
+                    "port": {"port": "1"},
+                    "linkSpeed": 3,
+                    "duplex": 2,
+                }
+            if device.get("type") == "gateway":
+                gateway = self.gateway_details.get(_normalize_mac(str(device.get("mac", ""))), {})
+                payload["wanPorts"] = [
+                    {
+                        "port": str(port.get("port")),
+                        "name": port.get("name"),
+                        "status": port.get("status", 0),
+                        "linkSpeed": port.get("speed", 0),
+                        "duplex": port.get("duplex", 0),
+                        "internetState": port.get("internetState", 0),
+                        "onlineDetection": port.get("onlineDetection", 0),
+                    }
+                    for port in gateway.get("portStats", [])
+                    if int(port.get("type", -1)) == 0
+                ]
+            return payload
+
+        nodes = {mac: node(device) for mac, device in devices.items()}
+        roots: list[dict[str, Any]] = []
+        for mac, device in devices.items():
+            uplink = device.get("uplink")
+            parent = nodes.get(_normalize_mac(str(uplink))) if uplink else None
+            if parent is None:
+                roots.append(nodes[mac])
+            else:
+                parent["successors"].append(nodes[mac])
+        return {"topologyArray": roots}
+
     def create_app(self, title: str) -> FastAPI:
         app = FastAPI(title=title, version="0.1.0")
         install_request_logging(app, "omada_controller")
@@ -388,6 +559,8 @@ class OmadaControllerMock:
                 "<p>Use this URL as controller host for both <code>ha-omada</code> and "
                 "<code>tplink_omada</code> integrations.</p>"
                 "<p>Host field must include protocol: <code>http://&lt;ip&gt;</code></p>"
+                f"<p>Controller version: <code>{self.version}</code> "
+                f"(openapi v2 client listing: {'on' if self.supports_openapi_v2 else 'off'})</p>"
                 f"<p>Username: <code>{self.username}</code> | Password: <code>{self.password}</code></p>"
                 "</body></html>"
             )
@@ -396,8 +569,16 @@ class OmadaControllerMock:
         async def api_info():
             return self._ok(
                 {
-                    "controllerVer": self.controller["version"],
+                    "controllerVer": self.version,
+                    "apiVer": "3" if self.supports_openapi_v2 else "2",
+                    "configured": True,
+                    "type": 1,
+                    "supportApp": True,
                     "omadacId": self.controller["id"],
+                    "registeredRoot": True,
+                    "omadacCategory": "software",
+                    "mspMode": False,
+                    "omadaCloudUrl": "",
                 }
             )
 
@@ -464,6 +645,16 @@ class OmadaControllerMock:
         async def ui_interface_alias():
             return await ui_interface(self.controller["id"])
 
+        @app.get("/{controller_id}/api/v2/sites")
+        async def list_sites(controller_id: str, request: Request):
+            if not self._matches_controller(controller_id):
+                return self._not_found("controller not found")
+            sites = [
+                {"id": option["key"], "key": option["key"], "name": option["name"]}
+                for option in self._site_options()
+            ]
+            return self._ok(self._paginate(sites, request))
+
         @app.get("/{controller_id}/api/v2/sites/{site}/clients")
         async def list_clients(controller_id: str, site: str, request: Request):
             err = self._require_controller_site(controller_id, site)
@@ -484,6 +675,7 @@ class OmadaControllerMock:
             client = self._ensure_client(mac)
             current = copy.deepcopy(client)
             current["active"] = self._is_client_active(client)
+            self._randomize_client_metrics(current)
             if current["active"]:
                 current["lastSeen"] = int(time.time() * 1000)
             return self._ok(current)
@@ -511,7 +703,14 @@ class OmadaControllerMock:
             err = self._require_controller_site(controller_id, site)
             if err:
                 return err
-            return self._ok(copy.deepcopy(self.devices))
+            return self._ok(self._runtime_devices())
+
+        @app.get("/{controller_id}/api/v2/sites/{site}/topology")
+        async def get_topology(controller_id: str, site: str):
+            err = self._require_controller_site(controller_id, site)
+            if err:
+                return err
+            return self._ok(self._build_topology())
 
         @app.get("/{controller_id}/api/v2/sites/{site}/gateways/{mac}")
         async def get_gateway(controller_id: str, site: str, mac: str):
@@ -633,7 +832,7 @@ class OmadaControllerMock:
             err = self._require_controller_site(controller_id, site)
             if err:
                 return err
-            return self._ok({"curFwVer": "1.0.10", "lastFwVer": "1.0.12", "fwReleaseLog": "Virtual firmware changelog"})
+            return self._ok(self._device_firmware(mac))
 
         @app.get("/{controller_id}/api/v2/sites/{site}/setting/lan/profileSummary")
         async def get_profile_summary(controller_id: str, site: str):
@@ -690,14 +889,7 @@ class OmadaControllerMock:
             err = self._require_controller_site(controller_id, site)
             if err:
                 return err
-            if action in {"block", "unblock", "reconnect"}:
-                client = self._ensure_client(mac)
-                if action == "block":
-                    client["blocked"] = True
-                if action == "unblock":
-                    client["blocked"] = False
-                return self._message(f"client {action}")
-            return JSONResponse({"errorCode": -30107, "msg": "unsupported action"}, status_code=400)
+            return self._apply_client_command(mac, action)
 
         @app.post("/{controller_id}/api/v2/sites/{site}/cmd/devices/{mac}/{action}")
         async def device_command(controller_id: str, site: str, mac: str, action: str, request: Request):
@@ -759,8 +951,68 @@ class OmadaControllerMock:
 
             return JSONResponse({"errorCode": -30106, "msg": "gateway port not found"}, status_code=404)
 
+        @app.post("/openapi/v2/{controller_id}/sites/{site}/clients")
+        async def openapi_list_clients(controller_id: str, site: str, request: Request):
+            err = self._require_openapi_site(controller_id, site)
+            if err:
+                return err
+            try:
+                payload = await request.json()
+            except Exception:
+                payload = {}
+
+            items = self._runtime_clients()
+            filters = payload.get("filters") or {}
+            if filters.get("active") is True:
+                items = [item for item in items if bool(item.get("active"))]
+            elif filters.get("active") is False:
+                items = [item for item in items if not item.get("active")]
+            return self._ok(self._paginate_body(items, payload))
+
+        @app.post("/openapi/v2/{controller_id}/sites/{site}/cmd/clients/{mac}/{action}")
+        async def openapi_client_command(controller_id: str, site: str, mac: str, action: str, request: Request):
+            err = self._require_openapi_site(controller_id, site)
+            if err:
+                return err
+            _ = await request.body()
+            return self._apply_client_command(mac, action)
+
+        @app.get("/openapi/v2/{controller_id}/sites/{site}/lan-profiles")
+        async def openapi_lan_profiles(controller_id: str, site: str, request: Request):
+            err = self._require_openapi_site(controller_id, site)
+            if err:
+                return err
+            return self._ok(self._paginate(copy.deepcopy(self.port_profiles), request))
+
+        @app.get("/openapi/v2/{controller_id}/sites/{site}/vpn/{slug}")
+        async def openapi_vpn_list(controller_id: str, site: str, slug: str, request: Request):
+            err = self._require_openapi_site(controller_id, site)
+            if err:
+                return err
+            if slug not in VPN_LIST_SLUGS:
+                return self._not_found("vpn collection not found")
+            return self._ok(self._paginate([], request))
+
         @app.patch("/openapi/v1/{controller_id}/sites/{site}/switches/{mac}/ports/{port_id}")
         async def openapi_switch_patch(controller_id: str, site: str, mac: str, port_id: int, request: Request):
             return await patch_switch_port(controller_id, site, mac, port_id, request)
 
         return app
+
+    def _apply_client_command(self, mac: str, action: str) -> JSONResponse:
+        if action not in {"block", "unblock", "reconnect"}:
+            return JSONResponse({"errorCode": -30107, "msg": "unsupported action"}, status_code=400)
+
+        client = self._ensure_client(mac)
+        norm = _normalize_mac(mac)
+        if action in {"block", "unblock"}:
+            blocked = action == "block"
+            client["blocked"] = blocked
+            for known in self.known_clients:
+                if _normalize_mac(str(known.get("mac", ""))) == norm:
+                    known["block"] = blocked
+                    known["blocked"] = blocked
+        else:
+            client["uptime"] = 0
+            client["lastSeen"] = int(time.time() * 1000)
+        return self._message(f"client {action}")

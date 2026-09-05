@@ -1,0 +1,81 @@
+{
+  "speedUnit": "MBps",
+  "states": {
+    "device_tracker.john_laptop": {
+      "entity_id": "device_tracker.john_laptop",
+      "state": "home",
+      "attributes": {
+        "friendly_name": "John Laptop",
+        "source_type": "router",
+        "name": "John Laptop",
+        "hostname": "john-laptop",
+        "ip": "10.50.0.61",
+        "mac": "02:50:00:00:00:61",
+        "wireless": true,
+        "ssid": "Home-5G",
+        "ap_mac": "02:50:00:00:0a:01",
+        "ap_name": "EAP670 Hall",
+        "channel": 36,
+        "radio": "5ghz",
+        "wifi_mode": "11axa"
+      }
+    },
+    "device_tracker.john_watch": {
+      "entity_id": "device_tracker.john_watch",
+      "state": "not_home",
+      "attributes": {
+        "friendly_name": "John Watch",
+        "source_type": "router",
+        "name": "John Watch",
+        "mac": "02:50:00:00:00:62",
+        "wireless": true,
+        "last_seen": 1756800000000
+      }
+    },
+    "device_tracker.eap_hall": {
+      "entity_id": "device_tracker.eap_hall",
+      "state": "home",
+      "attributes": {
+        "friendly_name": "EAP670 Hall",
+        "source_type": "router",
+        "type": "ap",
+        "model": "EAP670",
+        "firmware": "1.2.3",
+        "status": 14,
+        "status_category": 1,
+        "mesh": true,
+        "supports_5ghz": true,
+        "supports_6ghz": true,
+        "radio_mode_2ghz": "ng",
+        "radio_mode_5ghz": "ac",
+        "radio_mode_6ghz": "ax",
+        "bandwidth_2ghz": 20,
+        "bandwidth_5ghz": 80,
+        "bandwidth_6ghz": 160,
+        "tx_power_2ghz": 20,
+        "tx_power_5ghz": 23,
+        "tx_power_6ghz": 23
+      }
+    }
+  },
+  "expected": {
+    "device_tracker.john_laptop": {
+      "connectionType": "wifi",
+      "bandType": "5g",
+      "apName": "EAP670 Hall",
+      "channel": "36",
+      "channelValue": 36,
+      "wifiMode": "WiFi 6",
+      "wifiModeValue": 6
+    },
+    "device_tracker.john_watch": {
+      "isOnline": false,
+      "lastSeenValue": 1756800000000
+    },
+    "device_tracker.eap_hall": {
+      "deviceType": "Access Point",
+      "deviceStatus": "Connected",
+      "band": "2.4G/5G/6G"
+    }
+  }
+}

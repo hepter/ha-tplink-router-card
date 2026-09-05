@@ -30,6 +30,7 @@ export interface TplinkRouterCardConfig {
   show_hidden_entities?: boolean;
   header_action_render?: "icon" | "name" | "icon_name";
   row_action_render?: "icon" | "name" | "icon_name";
+  header_action_groups?: string[];
   default_filters?: {
     band?: "all" | "2g" | "5g" | "6g";
     connection?: "all" | "wifi" | "wired" | "iot" | "guest";

@@ -3,7 +3,9 @@ import { resolve } from "node:path";
 import { describe, expect, it } from "vitest";
 import {
   detectLinkRateUnit,
+  isTrackerStateOnline,
   mapTrackerStateToRow,
+  parseApName,
   preferredRouterDeviceIds,
   selectRouterTrackers,
 } from "./tplink";
@@ -185,5 +187,78 @@ describe("tplink adapter contract fixtures", () => {
     };
     const selected = selectRouterTrackers(states, [], "entry-a", false);
     expect(selected).toEqual([]);
+  });
+
+  it("maps EasyMesh ap_name into the access point column and detects the main node marker", () => {
+    const fixture = loadFixture<{
+      speedUnit: "MBps" | "Mbps";
+      states: Record<string, HassEntity>;
+      expected: Record<
+        string,
+        { apName: string; apNameValue: string | null; apIsMainNode: boolean }
+      >;
+    }>("easymesh_ap_name.json");
+
+    for (const [entityId, expected] of Object.entries(fixture.expected)) {
+      const row = mapTrackerStateToRow(fixture.states[entityId], fixture.speedUnit, "auto");
+      expect(row.apName, entityId).toBe(expected.apName);
+      expect(row.apNameValue, entityId).toBe(expected.apNameValue);
+      expect(row.apIsMainNode, entityId).toBe(expected.apIsMainNode);
+    }
+  });
+
+  it("parses ap_name markers without leaking the asterisk into the label", () => {
+    expect(parseApName("AX55 node")).toEqual({ name: "AX55 node", isMainNode: false });
+    expect(parseApName("*Archer BE550")).toEqual({ name: "Archer BE550", isMainNode: true });
+    expect(parseApName("* ")).toEqual({ name: null, isMainNode: true });
+    expect(parseApName(undefined)).toEqual({ name: null, isMainNode: false });
+    expect(parseApName("")).toEqual({ name: null, isMainNode: false });
+  });
+
+  it("treats a zone name state as online because HA scanner trackers can report the associated zone", () => {
+    expect(isTrackerStateOnline("home")).toBe(true);
+    expect(isTrackerStateOnline("Office")).toBe(true);
+    expect(isTrackerStateOnline("on")).toBe(true);
+    expect(isTrackerStateOnline("connected")).toBe(true);
+    expect(isTrackerStateOnline("not_home")).toBe(false);
+    expect(isTrackerStateOnline("unavailable")).toBe(false);
+    expect(isTrackerStateOnline("unknown")).toBe(false);
+    expect(isTrackerStateOnline("off")).toBe(false);
+    expect(isTrackerStateOnline("")).toBe(false);
+    expect(isTrackerStateOnline(null)).toBe(false);
+
+    const zoned: HassEntity = {
+      entity_id: "device_tracker.zoned_client",
+      state: "Office",
+      attributes: {
+        source_type: "router",
+        friendly_name: "Zoned Client",
+        ip: "192.168.0.50",
+        mac: "AA-BB-CC-DD-EE-50",
+        connection: "host",
+        band: "5G",
+      },
+    };
+    const row = mapTrackerStateToRow(zoned, "MBps", "auto");
+    expect(row.isOnline).toBe(true);
+    expect(row.statusValue).toBe(1);
+
+    const unavailable = { ...zoned, state: "unavailable" };
+    expect(mapTrackerStateToRow(unavailable, "MBps", "auto").isOnline).toBe(false);
+  });
+
+  it("fills omada-only columns with placeholders for tplink rows", () => {
+    const state: HassEntity = {
+      entity_id: "device_tracker.plain_client",
+      state: "home",
+      attributes: { source_type: "router", friendly_name: "Plain", ip: "10.0.0.2" },
+    };
+    const row = mapTrackerStateToRow(state, "MBps", "auto");
+    expect(row.channel).toBe("—");
+    expect(row.channelValue).toBeNull();
+    expect(row.wifiMode).toBe("—");
+    expect(row.wifiModeValue).toBeNull();
+    expect(row.lastSeen).toBe("—");
+    expect(row.lastSeenValue).toBeNull();
   });
 });

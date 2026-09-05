@@ -10,7 +10,16 @@ import {
 } from "../utils/format";
 import type { EntityRegistryEntry, HassEntity } from "../core/types";
 
-export const STATUS_ONLINE = new Set(["home", "on", "connected"]);
+// HA scanner trackers may report an associated zone name instead of `home` (core 2026.6+),
+// so online is "any non-empty state that is not explicitly offline".
+const OFFLINE_TRACKER_STATES = new Set(["not_home", "off", "unavailable", "unknown", "none"]);
+
+export const isTrackerStateOnline = (state: unknown): boolean => {
+  if (state === null || state === undefined) return false;
+  const text = String(state).trim().toLowerCase();
+  if (text.length === 0) return false;
+  return !OFFLINE_TRACKER_STATES.has(text);
+};
 
 const ONLINE_STATUS_COLOR = "var(--tplink-router-card-online-color, var(--success-color, #3aa45b))";
 const OFFLINE_STATUS_COLOR = "var(--tplink-router-card-offline-color, var(--error-color, #d32f2f))";
@@ -35,6 +44,9 @@ export interface MappedTrackerRow {
   connectionType: ConnectionType;
   band: string;
   bandType: BandType;
+  apName: string;
+  apNameValue: string | null;
+  apIsMainNode: boolean;
   ip: string;
   mac: string;
   hostname: string;
@@ -65,6 +77,12 @@ export interface MappedTrackerRow {
   snrValue: number | null;
   powerSave: string;
   powerSaveValue: number | null;
+  channel: string;
+  channelValue: number | null;
+  wifiMode: string;
+  wifiModeValue: number | null;
+  lastSeen: string;
+  lastSeenValue: number | null;
   deviceType?: string;
   deviceModel?: string;
   deviceFirmware?: string;
@@ -113,6 +131,27 @@ export const normalizeConnection = (value: unknown): ConnectionType => {
 
 export const normalizeMac = (value: string) =>
   value.replace(/[^0-9a-f]/gi, "").toLowerCase();
+
+export const plainApName = (value: unknown): string | null => {
+  if (value === null || value === undefined) return null;
+  const text = String(value).trim();
+  return text.length > 0 ? text : null;
+};
+
+// tplink_router prefixes ap_name with `*` for clients on the main (non-satellite) node.
+// Only that integration uses the marker; other adapters must call plainApName.
+export const parseApName = (
+  value: unknown,
+): { name: string | null; isMainNode: boolean } => {
+  if (value === null || value === undefined) return { name: null, isMainNode: false };
+  const text = String(value).trim();
+  if (text.length === 0) return { name: null, isMainNode: false };
+  if (text.startsWith("*")) {
+    const stripped = text.slice(1).trim();
+    return { name: stripped.length > 0 ? stripped : null, isMainNode: true };
+  }
+  return { name: text, isMainNode: false };
+};
 
 export const signalColor = (dbm: number | null) => {
   if (dbm === null) return "var(--secondary-text-color)";
@@ -329,10 +368,14 @@ const titleCase = (value: string) =>
     .map((item) => item[0].toUpperCase() + item.slice(1))
     .join(" ");
 
-const mapDeviceType = (value: unknown) => {
+const mapDeviceType = (value: unknown, master: unknown) => {
   const text = toJoinedText(value).toLowerCase();
   if (text === "—") return "—";
-  if (text === "deco") return "Deco";
+  if (text === "deco") {
+    if (master === true) return "Deco (Master)";
+    if (master === false) return "Deco (Satellite)";
+    return "Deco";
+  }
   if (text === "client") return "Client";
   return titleCase(text);
 };
@@ -340,6 +383,8 @@ const mapDeviceType = (value: unknown) => {
 const mapDeviceStatus = (attrs: Record<string, unknown>) => {
   const internetOnline = attrs.internet_online;
   if (typeof internetOnline === "boolean") return internetOnline ? "Online" : "Offline";
+  // ha-tplink-deco sends null when the node could not be queried.
+  if ("internet_online" in attrs && internetOnline === null) return "Unknown";
   if (typeof internetOnline === "string") {
     const text = internetOnline.trim().toLowerCase();
     if (text === "true" || text === "online") return "Online";
@@ -391,10 +436,14 @@ export const mapTrackerStateToRow = (
       attrs.hostname ??
       attrs.host ??
       attrs.name ??
-      attrs.deco_device ??
+      attrs.ui_device_name ??
       attrs.device_model ??
       "—",
   );
+  const apInfo =
+    attrs.ap_name !== undefined
+      ? parseApName(attrs.ap_name)
+      : { name: plainApName(attrs.apName ?? attrs.deco_device), isMainNode: false };
   const packetsSentValue = toNumber(attrs.packets_sent ?? attrs.up_packet ?? attrs.upPacket);
   const packetsReceivedValue = toNumber(
     attrs.packets_received ?? attrs.down_packet ?? attrs.downPacket,
@@ -415,7 +464,7 @@ export const mapTrackerStateToRow = (
       ? (trafficDown ?? 0) + (trafficUp ?? 0)
       : toNumber(attrs.traffic_usage ?? attrs.total_traffic ?? attrs.traffic_total);
   const signalValue = resolveFirstNumber(attrs, SIGNAL_FIELD_ALIASES);
-  const deviceType = mapDeviceType(attrs.device_type ?? attrs.type);
+  const deviceType = mapDeviceType(attrs.device_type ?? attrs.type, attrs.master);
   const deviceModel = safeString(attrs.device_model ?? attrs.model ?? "—");
   const deviceFirmware = safeString(
     attrs.sw_version ?? attrs.firmware ?? attrs.firmware_version ?? "—",
@@ -425,7 +474,7 @@ export const mapTrackerStateToRow = (
     (ip === "0.0.0.0" || ip === "—") &&
     connectionType === "unknown" &&
     bandType === "unknown";
-  const isOnline = STATUS_ONLINE.has(state.state) && !hasInvalidOnlinePresence;
+  const isOnline = isTrackerStateOnline(state.state) && !hasInvalidOnlinePresence;
 
   return {
     entity_id: state.entity_id,
@@ -439,6 +488,9 @@ export const mapTrackerStateToRow = (
     connectionType,
     band,
     bandType,
+    apName: apInfo.name ?? "—",
+    apNameValue: apInfo.name,
+    apIsMainNode: apInfo.isMainNode,
     ip,
     mac,
     hostname,
@@ -469,6 +521,12 @@ export const mapTrackerStateToRow = (
     snrValue: null,
     powerSave: "—",
     powerSaveValue: null,
+    channel: "—",
+    channelValue: null,
+    wifiMode: "—",
+    wifiModeValue: null,
+    lastSeen: "—",
+    lastSeenValue: null,
     deviceType,
     deviceModel,
     deviceFirmware,

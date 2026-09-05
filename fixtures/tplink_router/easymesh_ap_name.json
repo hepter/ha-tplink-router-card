@@ -1,0 +1,71 @@
+{
+  "speedUnit": "MBps",
+  "states": {
+    "device_tracker.satellite_client": {
+      "entity_id": "device_tracker.satellite_client",
+      "state": "home",
+      "attributes": {
+        "friendly_name": "Satellite Client",
+        "source_type": "router",
+        "ip": "192.168.0.42",
+        "mac": "AA-BB-CC-DD-EE-42",
+        "hostname": "satellite-client",
+        "connection": "host",
+        "band": "2G",
+        "packets_sent": 1200,
+        "packets_received": 3400,
+        "signal": -40,
+        "ap_name": "AX55 node"
+      }
+    },
+    "device_tracker.main_client": {
+      "entity_id": "device_tracker.main_client",
+      "state": "home",
+      "attributes": {
+        "friendly_name": "Main Client",
+        "source_type": "router",
+        "ip": "192.168.0.43",
+        "mac": "AA-BB-CC-DD-EE-43",
+        "hostname": "main-client",
+        "connection": "host",
+        "band": "5G",
+        "packets_sent": 10,
+        "packets_received": 20,
+        "signal": -51,
+        "ap_name": "*Archer BE550"
+      }
+    },
+    "device_tracker.legacy_client": {
+      "entity_id": "device_tracker.legacy_client",
+      "state": "home",
+      "attributes": {
+        "friendly_name": "Legacy Client",
+        "source_type": "router",
+        "ip": "192.168.0.44",
+        "mac": "AA-BB-CC-DD-EE-44",
+        "hostname": "legacy-client",
+        "connection": "wired",
+        "band": null,
+        "packets_sent": 1,
+        "packets_received": 1
+      }
+    }
+  },
+  "expected": {
+    "device_tracker.satellite_client": {
+      "apName": "AX55 node",
+      "apNameValue": "AX55 node",
+      "apIsMainNode": false
+    },
+    "device_tracker.main_client": {
+      "apName": "Archer BE550",
+      "apNameValue": "Archer BE550",
+      "apIsMainNode": true
+    },
+    "device_tracker.legacy_client": {
+      "apName": "—",
+      "apNameValue": null,
+      "apIsMainNode": false
+    }
+  }
+}

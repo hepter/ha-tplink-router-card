@@ -8,6 +8,7 @@ export const COMMON_COLUMN_KEYS = [
   "status",
   "connection",
   "band",
+  "apName",
   "ip",
   "mac",
   "hostname",
@@ -38,6 +39,9 @@ export const OMADA_EXTRA_COLUMN_KEYS = [
   "actions",
   "snr",
   "powerSave",
+  "channel",
+  "wifiMode",
+  "lastSeen",
   ...TRAFFIC_PRIMITIVE_COLUMN_KEYS,
 ] as const;
 
@@ -58,6 +62,16 @@ const OMADA_COLUMN_KEYS = [
   ...OMADA_EXTRA_COLUMN_KEYS,
 ] as const;
 
+// Core tplink_omada trackers carry no AP, client metric or power-save data.
+const TPLINK_OMADA_COLUMN_KEYS = [
+  ...COMMON_COLUMN_KEYS.filter((key) => key !== "apName"),
+  ...DEVICE_METADATA_COLUMN_KEYS,
+  "actions",
+] as const;
+
+// Allowed for their domains but only rendered when listed in `columns` / `column_layout`.
+export const OPT_IN_COLUMN_KEYS = ["apName", "channel", "wifiMode", "lastSeen"] as const;
+
 export const BASE_COLUMN_KEYS = COMMON_COLUMN_KEYS;
 export const ALL_COLUMN_KEYS = [
   ...COMMON_COLUMN_KEYS,
@@ -71,7 +85,7 @@ const DOMAIN_COLUMN_KEYS: Record<SupportedIntegrationDomain, readonly ColumnKey[
   tplink_router: COMMON_COLUMN_KEYS,
   tplink_deco: TPLINK_DECO_COLUMN_KEYS,
   omada: OMADA_COLUMN_KEYS,
-  tplink_omada: OMADA_COLUMN_KEYS,
+  tplink_omada: TPLINK_OMADA_COLUMN_KEYS,
 };
 
 export const getAllowedColumnsForDomain = (

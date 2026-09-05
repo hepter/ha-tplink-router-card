@@ -1,0 +1,35 @@
+{
+  "state": {
+    "entity_id": "device_tracker.deco_bedroom",
+    "state": "home",
+    "attributes": {
+      "friendly_name": "Bedroom Deco",
+      "source_type": "router",
+      "device_type": "deco",
+      "device_model": "Deco X50",
+      "hw_version": "1.0",
+      "sw_version": "1.0.17 Build 20260118 Rel.10220",
+      "internet_online": null,
+      "master": false,
+      "deco_device": "Living Room",
+      "deco_mac": "02-68-50-AA-10-02",
+      "connection_type": ["band5"],
+      "bssid_band2_4": "02-68-50-AA-10-03",
+      "bssid_band5": "02-68-50-AA-10-13",
+      "signal_band2_4": 3,
+      "signal_band5": 4,
+      "ip": "10.68.0.3",
+      "mac": "02-68-50-AA-10-03"
+    }
+  },
+  "speedUnit": "MBps",
+  "expected": {
+    "connection": "wifi",
+    "connectionType": "wifi",
+    "band": "5G",
+    "bandType": "5g",
+    "apName": "Living Room",
+    "deviceType": "Deco (Satellite)",
+    "deviceStatus": "Unknown"
+  }
+}

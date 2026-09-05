@@ -44,3 +44,42 @@ export const localize = (
   }
   return value;
 };
+
+// Adapters emit stable English labels; the card translates the known ones at render time.
+const LABEL_KEYS: Record<string, string> = {
+  wifi: "wifi",
+  wired: "wired",
+  guest: "guest",
+  iot: "iot",
+  host: "host",
+  gateway: "gateway",
+  switch: "switch",
+  "access point": "accessPoint",
+  online: "online",
+  offline: "offline",
+  unknown: "unknown",
+  connected: "connected",
+  disconnected: "disconnected",
+  pending: "pending",
+  "heartbeat missed": "heartbeatMissed",
+  isolated: "isolated",
+  provisioning: "provisioning",
+  configuring: "configuring",
+  upgrading: "upgrading",
+  rebooting: "rebooting",
+  adopting: "adopting",
+  "adopt failed": "adoptFailed",
+  "managed externally": "managedExternally",
+  deco: "deco",
+  "deco (master)": "decoMaster",
+  "deco (satellite)": "decoSatellite",
+  client: "client",
+  on: "on",
+  off: "off",
+};
+
+export const localizeLabel = (hass: HomeAssistant | undefined, value: string | undefined | null) => {
+  if (value === null || value === undefined) return "—";
+  const key = LABEL_KEYS[value.trim().toLowerCase()];
+  return key ? localize(hass, `labels.${key}`) : value;
+};

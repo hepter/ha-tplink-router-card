@@ -6,3 +6,4 @@ fixtures/tplink_router/live-*.json
 __pycache__/
 *.pyc
 .venv/
+docs/plans/

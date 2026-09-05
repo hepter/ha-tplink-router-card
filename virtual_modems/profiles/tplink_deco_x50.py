@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import base64
 import json
+import os
 import re
 import random
 import secrets
@@ -18,10 +19,17 @@ from ..shared.rsa_session import AesCbcContext, RsaKeyPair, parse_sign_payload
 from ..shared.request_logging import install_request_logging
 
 
+GLOBAL_CLIENT_MAC = "default"
+
+
 def _load_fixture() -> dict[str, Any]:
     file_path = Path(__file__).resolve().parents[1] / "data" / "tplink_deco_x50.json"
     with file_path.open("r", encoding="utf-8") as file:
         return json.load(file)
+
+
+def _per_node_clients_enabled() -> bool:
+    return os.getenv("VMODEM_DECO_CLIENT_MODE", "per_node").strip().lower() != "global_fallback"
 
 
 @dataclass
@@ -111,35 +119,63 @@ class TplinkDecoX50Mock:
             return {}
         return self._decrypt_payload(session.aes, data_b64)
 
+    def _deco_macs(self) -> list[str]:
+        return [str(deco["mac"]) for deco in self.fixture["decos"]]
+
     def _device_list(self) -> list[dict[str, Any]]:
         devices: list[dict[str, Any]] = []
         for deco in self.fixture["decos"]:
             name = str(deco.get("name") or deco.get("device_model") or "Deco").strip()
-            devices.append(
-                {
-                    "mac": deco["mac"],
-                    "nickname": name.lower().replace(" ", "_"),
-                    "custom_nickname": deco.get("custom_nickname"),
-                    "role": deco.get("role", "slave"),
-                    "device_model": deco.get("device_model", "Deco"),
-                    "hardware_ver": deco.get("hardware_ver", "1.0"),
-                    "software_ver": deco.get("software_ver", "1.0.0"),
-                    "device_ip": deco.get("ip_address", "10.68.0.1"),
-                    "group_status": "connected" if deco.get("online", True) else "disconnected",
-                    "inet_status": "online" if deco.get("internet_online", True) else "offline",
-                    "connection_type": deco.get("connection_type", "wired"),
-                    "bssid_2g": deco.get("bssid_band2_4"),
-                    "bssid_5g": deco.get("bssid_band5"),
-                    "signal_level": {
-                        "band2_4": deco.get("signal_band2_4"),
-                        "band5": deco.get("signal_band5"),
-                    },
-                }
-            )
+            custom_nickname = deco.get("custom_nickname")
+            entry: dict[str, Any] = {
+                "mac": deco["mac"],
+                "nickname": name.lower().replace(" ", "_"),
+                "custom_nickname": (
+                    self._encode_client_name(str(custom_nickname))
+                    if custom_nickname
+                    else None
+                ),
+                "role": deco.get("role", "slave"),
+                "device_model": deco.get("device_model", "Deco"),
+                "hardware_ver": deco.get("hardware_ver", "1.0"),
+                "software_ver": deco.get("software_ver", "1.0.0"),
+                "device_ip": deco.get("ip_address", "10.68.0.1"),
+                "group_status": "connected" if deco.get("online", True) else "disconnected",
+                "connection_type": deco.get("connection_type", "wired"),
+                "bssid_2g": deco.get("bssid_band2_4"),
+                "bssid_5g": deco.get("bssid_band5"),
+                "signal_level": {
+                    "band2_4": deco.get("signal_band2_4"),
+                    "band5": deco.get("signal_band5"),
+                },
+                # ha-tplink-deco reads the firmware's "backhual" misspelling; aliases are extra.
+                "backhual_speed": deco.get("backhaul_speed"),
+                "backhual_max_speed": deco.get("backhaul_max_speed"),
+                "backhaul_speed": deco.get("backhaul_speed"),
+                "backhaul_max_speed": deco.get("backhaul_max_speed"),
+            }
+
+            if "inet_status" in deco:
+                # A null inet_status means the firmware omits the key entirely.
+                if deco["inet_status"] is not None:
+                    entry["inet_status"] = deco["inet_status"]
+            else:
+                entry["inet_status"] = "online" if deco.get("internet_online", True) else "offline"
+
+            devices.append(entry)
         return devices
 
     def _encode_client_name(self, value: str) -> str:
         return base64.b64encode(value.encode("utf-8")).decode("ascii")
+
+    def _ensure_encoded_name(self, value: Any) -> Any:
+        if not isinstance(value, str) or not value:
+            return value
+        try:
+            decoded = base64.b64decode(value, validate=True).decode("utf-8")
+        except Exception:
+            return self._encode_client_name(value)
+        return value if decoded.startswith("vm-") else self._encode_client_name(value)
 
     def _build_generated_clients(self) -> list[dict[str, Any]]:
         groups = [
@@ -150,13 +186,15 @@ class TplinkDecoX50Mock:
             ("guest-phone", 8, "wireless", "band5", "guest"),
             ("guest-2g", 4, "wireless", "band2_4", "guest"),
         ]
+        deco_macs = self._deco_macs()
         generated: list[dict[str, Any]] = []
         ip_octet = 61
-        mac_octet = 0x40
+        mac_octet = 0x20
+        spread = 0
         for prefix, count, wire_type, connection_type, interface in groups:
             for idx in range(1, count + 1):
                 plain_name = f"vm-{prefix}-{idx:02d}"
-                mac = f"0A-DE-50-00-{mac_octet:02X}-{idx:02X}"
+                mac = f"02:56:4D:02:{mac_octet:02X}:{idx:02X}"
                 generated.append(
                     {
                         "name": self._encode_client_name(plain_name),
@@ -166,15 +204,22 @@ class TplinkDecoX50Mock:
                         "wire_type": wire_type,
                         "connection_type": connection_type,
                         "interface": interface,
-                        "deco_mac": self.fixture["decos"][0]["mac"],
+                        "deco_mac": deco_macs[spread % len(deco_macs)],
                     }
                 )
                 ip_octet += 1
+                spread += 1
             mac_octet += 1
         return generated
 
     def _build_client_catalog(self) -> list[dict[str, Any]]:
-        fixture_clients = [dict(client) for client in self.fixture["clients"]]
+        default_deco_mac = self._deco_macs()[0]
+        fixture_clients: list[dict[str, Any]] = []
+        for client in self.fixture["clients"]:
+            entry = dict(client)
+            entry["name"] = self._ensure_encoded_name(entry.get("name"))
+            entry["deco_mac"] = entry.get("deco_mac") or default_deco_mac
+            fixture_clients.append(entry)
         return fixture_clients + self._build_generated_clients()
 
     def _profile_for_client(self, client: dict[str, Any]) -> str:
@@ -254,15 +299,15 @@ class TplinkDecoX50Mock:
             }
         return runtime
 
-    def _client_list(self) -> list[dict[str, Any]]:
+    def _advance_client_runtime(self) -> None:
         now = time.monotonic()
-        delta_seconds = max(0.3, min(4.0, now - self._last_client_tick))
+        elapsed = now - self._last_client_tick
+        # Per-node polling issues one request per deco back to back; only the first advances time.
+        if elapsed < 0.25:
+            return
+        delta_seconds = max(0.3, min(4.0, elapsed))
         self._last_client_tick = now
-        clients: list[dict[str, Any]] = []
-        for client in self._clients_catalog:
-            runtime = self._client_runtime.get(client["mac"])
-            if runtime is None:
-                continue
+        for runtime in self._client_runtime.values():
             profile = str(runtime["profile"])
             is_online = self._next_online_state(profile, bool(runtime["online"]))
             runtime["online"] = is_online
@@ -274,21 +319,37 @@ class TplinkDecoX50Mock:
                 runtime["down_kb"] = 0
                 runtime["up_kb"] = 0
 
-            down_kb = int(runtime["down_kb"])
-            up_kb = int(runtime["up_kb"])
             runtime["traffic_down"] = int(runtime["traffic_down"]) + int(
-                down_kb * 1_000 * delta_seconds
+                int(runtime["down_kb"]) * 1_000 * delta_seconds
             )
             runtime["traffic_up"] = int(runtime["traffic_up"]) + int(
-                up_kb * 1_000 * delta_seconds
+                int(runtime["up_kb"]) * 1_000 * delta_seconds
             )
 
+    def _client_list(self, deco_mac: str | None = None) -> list[dict[str, Any]]:
+        self._advance_client_runtime()
+        wanted = None
+        if deco_mac and deco_mac != GLOBAL_CLIENT_MAC:
+            wanted = deco_mac.replace("-", ":").upper()
+
+        clients: list[dict[str, Any]] = []
+        for client in self._clients_catalog:
+            runtime = self._client_runtime.get(client["mac"])
+            if runtime is None:
+                continue
+            if wanted is not None:
+                owner = str(client.get("deco_mac") or "").replace("-", ":").upper()
+                if owner != wanted:
+                    continue
+
+            down_kb = int(runtime["down_kb"])
+            up_kb = int(runtime["up_kb"])
             clients.append(
                 {
                     "name": client.get("name"),
                     "mac": client.get("mac"),
                     "ip": client.get("ip"),
-                    "online": is_online,
+                    "online": bool(runtime["online"]),
                     "wire_type": client.get("wire_type", "wireless"),
                     "connection_type": client.get("connection_type", "band5"),
                     "interface": client.get("interface", "main"),
@@ -306,11 +367,24 @@ class TplinkDecoX50Mock:
 
     def _runtime_performance(self) -> dict[str, Any]:
         perf = dict(self.fixture["performance"])
-        cpu = int(perf.get("cpu_usage") or 12)
-        mem = int(perf.get("mem_usage") or 24)
-        perf["cpu_usage"] = max(2, min(95, int(cpu * self._rand.uniform(0.7, 1.45))))
-        perf["mem_usage"] = max(5, min(95, int(mem * self._rand.uniform(0.75, 1.35))))
+        # ha-tplink-deco multiplies these by 100, so they must stay 0..1 ratios.
+        cpu = float(perf.get("cpu_usage") or 0.12)
+        mem = float(perf.get("mem_usage") or 0.24)
+        perf["cpu_usage"] = round(max(0.02, min(0.95, cpu * self._rand.uniform(0.7, 1.45))), 4)
+        perf["mem_usage"] = round(max(0.05, min(0.95, mem * self._rand.uniform(0.75, 1.35))), 4)
         return perf
+
+    def _reboot_decos(self, mac_list: list[dict[str, Any]] | None) -> list[str]:
+        wanted = {
+            str(item.get("mac") or "").replace("-", ":").upper()
+            for item in (mac_list or [])
+            if isinstance(item, dict)
+        }
+        rebooted: list[str] = []
+        for deco in self.fixture["decos"]:
+            if str(deco["mac"]).upper() in wanted:
+                rebooted.append(str(deco["mac"]))
+        return rebooted
 
 
 def create_app() -> FastAPI:
@@ -402,13 +476,26 @@ def create_app() -> FastAPI:
             )
 
         if endpoint == "admin/client" and form == "client_list":
+            params = payload.get("params") or {}
+            deco_mac = params.get("device_mac") or GLOBAL_CLIENT_MAC
+            if deco_mac != GLOBAL_CLIENT_MAC and not _per_node_clients_enabled():
+                # Reproduces the firmwares that 5xx per-node queries and force the global fallback.
+                return JSONResponse(
+                    {"error_code": -1, "msg": "per-node client_list unavailable"},
+                    status_code=503,
+                )
             return mock._json_encrypted(
                 session,
-                {"error_code": 0, "result": {"client_list": mock._client_list()}},
+                {"error_code": 0, "result": {"client_list": mock._client_list(deco_mac)}},
             )
 
         if endpoint == "admin/device" and form == "system":
-            return mock._json_encrypted(session, {"error_code": 0, "result": {"reboot": "ok"}})
+            params = payload.get("params") or {}
+            rebooted = mock._reboot_decos(params.get("mac_list"))
+            return mock._json_encrypted(
+                session,
+                {"error_code": 0, "result": {"reboot": "ok", "mac_list": rebooted}},
+            )
 
         if endpoint == "admin/system" and form == "logout":
             return mock._json_encrypted(session, {"error_code": 0, "result": {"logout": True}})

@@ -376,7 +376,8 @@ export const cardStyles = css`
   td.actions-cell.sticky-start,
   th.actions-cell.sticky-end,
   td.actions-cell.sticky-end {
-    max-width: min(88vw, max(260px, 58rem));
+    max-width: min(50vw, 58rem);
+    max-width: min(50cqw, 58rem);
   }
 
   td.actions-cell.sticky-start .row-actions,
@@ -390,9 +391,11 @@ export const cardStyles = css`
   td.actions-cell.sticky-start .cell-content,
   td.actions-cell.sticky-end .cell-content {
     display: block;
-    max-width: min(88vw, max(260px, 58rem));
+    max-width: min(calc(50vw - 20px), 58rem);
+    max-width: min(calc(50cqw - 20px), 58rem);
     overflow-x: auto;
     overflow-y: hidden;
+    text-overflow: clip;
     scrollbar-width: thin;
   }
 
@@ -428,25 +431,36 @@ export const cardStyles = css`
     white-space: nowrap;
   }
 
+  th.sticky-start,
+  th.sticky-end,
   td.sticky-start,
   td.sticky-end {
-    max-width: min(70vw, max(180px, 30rem));
+    max-width: min(50vw, 30rem);
+    max-width: min(50cqw, 30rem);
   }
 
   td.sticky-start .cell-content,
   td.sticky-end .cell-content {
     display: block;
-    max-width: min(70vw, max(180px, 30rem));
-    overflow-x: auto;
-    overflow-y: hidden;
+    min-width: 0;
+    max-width: min(calc(50vw - 20px), 30rem);
+    max-width: min(calc(50cqw - 20px), 30rem);
+    overflow: hidden;
+    text-overflow: ellipsis;
     white-space: nowrap;
-    scrollbar-width: thin;
   }
 
-  td.sticky-start .cell-content.cell-content-ellipsis,
-  td.sticky-end .cell-content.cell-content-ellipsis {
+  td.sticky-start .name-cell,
+  td.sticky-end .name-cell {
+    max-width: 100%;
+  }
+
+  td.sticky-start .name-cell .link,
+  td.sticky-end .name-cell .link,
+  td.sticky-start .name-text,
+  td.sticky-end .name-text {
+    min-width: 0;
     overflow: hidden;
-    overflow-x: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
   }
@@ -527,6 +541,7 @@ export const cardStyles = css`
   .table-wrapper {
     overflow: auto;
     max-height: 70vh;
+    container-type: inline-size;
   }
 
   table {
@@ -945,9 +960,38 @@ export const cardStyles = css`
     opacity: 1;
   }
 
+  .ap-cell {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    white-space: nowrap;
+  }
+
+  .ap-main-badge {
+    --mdc-icon-size: 14px;
+    color: var(--primary-color);
+  }
+
   .empty {
     padding: 16px 18px 20px;
     color: var(--secondary-text-color);
+  }
+
+  .empty-hint {
+    margin-top: 8px;
+    font-size: 12px;
+    opacity: 0.85;
+  }
+
+  .notice {
+    margin: 0 18px 8px;
+    padding: 8px 12px;
+    border-radius: 8px;
+    font-size: 12px;
+    color: var(--primary-text-color);
+    background: var(--warning-color, #ffa726);
+    background: color-mix(in srgb, var(--warning-color, #ffa726) 18%, transparent);
+    border: 1px solid var(--warning-color, #ffa726);
   }
 
   @media (max-width: 1200px) {

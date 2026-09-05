@@ -4,8 +4,9 @@ from ..shared.omada_controller_mock import OmadaControllerMock
 
 
 def create_app():
-    return OmadaControllerMock().create_app(
-        "Virtual TP-Link Omada Controller (ha-omada + tplink_omada)"
+    mock = OmadaControllerMock()
+    return mock.create_app(
+        f"Virtual TP-Link Omada Controller {mock.version} (ha-omada + tplink_omada)"
     )
 
 

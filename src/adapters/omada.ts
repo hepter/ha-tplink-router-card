@@ -1,5 +1,6 @@
 import {
   formatBytes,
+  formatDateTime,
   formatDuration,
   formatLinkSpeed,
   formatNumber,
@@ -8,7 +9,9 @@ import {
 } from "../utils/format";
 import {
   getStatusColor,
+  isTrackerStateOnline,
   normalizeMac,
+  plainApName,
   signalColor,
   toNumber,
   type MappedTrackerRow,
@@ -19,10 +22,15 @@ import type {
   HassEntity,
 } from "../core/types";
 
-const STATUS_ONLINE = new Set(["home", "on", "connected"]);
-
 type OmadaBandType = MappedTrackerRow["bandType"];
 type OmadaConnectionType = MappedTrackerRow["connectionType"];
+
+export type OmadaRowOptions = {
+  // Core tplink_omada only creates trackers for wireless clients and publishes no
+  // connection attributes, so the wired fallback would mislabel every client.
+  assumeWirelessClients?: boolean;
+  locale?: string;
+};
 
 type OmadaClientMetrics = {
   downloadedMB: number | null;
@@ -54,16 +62,106 @@ const isLikelyOmadaTrackerByAttrs = (state: HassEntity) => {
   const attrs = state.attributes as Record<string, unknown>;
   const sourceType = String(attrs.source_type ?? "").toLowerCase();
   if (sourceType && sourceType !== "router") return false;
+  // ap_name is deliberately absent: tplink_router publishes it for EasyMesh clients too.
   return (
     "wireless" in attrs ||
     "guest" in attrs ||
     "ssid" in attrs ||
-    "ap_name" in attrs ||
     "ap_mac" in attrs ||
     "switch_port" in attrs ||
     "channel_width" in attrs ||
     "radio" in attrs
   );
+};
+
+const WIFI_MODE_GENERATIONS: Array<[RegExp, number]> = [
+  [/^11be/, 7],
+  [/^11ax/, 6],
+  [/^11ac/, 5],
+  [/^11n/, 4],
+  [/^11g$/, 3],
+  [/^11a$/, 2],
+  [/^11b$/, 1],
+];
+
+const mapWifiMode = (value: unknown): { label: string; generation: number | null } => {
+  const text = toText(value).toLowerCase();
+  if (!text) return { label: "—", generation: null };
+  for (const [pattern, generation] of WIFI_MODE_GENERATIONS) {
+    if (pattern.test(text)) return { label: `WiFi ${generation}`, generation };
+  }
+  return { label: safeString(value), generation: null };
+};
+
+const parseLastSeenMs = (value: unknown): number | null => {
+  if (value === null || value === undefined) return null;
+  const asNumber = toNumber(value);
+  if (asNumber !== null) {
+    if (asNumber <= 0) return null;
+    return asNumber < 1e11 ? asNumber * 1000 : asNumber;
+  }
+  if (typeof value === "string") {
+    const parsed = Date.parse(value);
+    return Number.isFinite(parsed) ? parsed : null;
+  }
+  return null;
+};
+
+const resolveDeviceRadioBands = (attrs: Record<string, unknown>): string => {
+  const labels: string[] = [];
+  if (toText(attrs.radio_mode_2ghz)) labels.push("2.4G");
+  if (toText(attrs.radio_mode_5ghz) || attrs.supports_5ghz === true) labels.push("5G");
+  if (toText(attrs.radio_mode_6ghz) || attrs.supports_6ghz === true) labels.push("6G");
+  return labels.length > 0 ? labels.join("/") : "—";
+};
+
+const OMADA_STATUS_CATEGORY_LABELS: Record<number, string> = {
+  0: "Disconnected",
+  1: "Connected",
+  2: "Pending",
+  3: "Heartbeat Missed",
+  4: "Isolated",
+};
+
+const OMADA_STATUS_CODE_LABELS: Record<number, string> = {
+  0: "Disconnected",
+  1: "Disconnected",
+  10: "Provisioning",
+  11: "Configuring",
+  12: "Upgrading",
+  13: "Rebooting",
+  14: "Connected",
+  15: "Connected",
+  16: "Connected",
+  17: "Connected",
+  20: "Pending",
+  21: "Pending",
+  22: "Adopting",
+  23: "Adopting",
+  24: "Adopt Failed",
+  25: "Adopt Failed",
+  26: "Managed Externally",
+  27: "Managed Externally",
+  30: "Heartbeat Missed",
+  31: "Heartbeat Missed",
+  32: "Heartbeat Missed",
+  33: "Heartbeat Missed",
+  40: "Isolated",
+  41: "Isolated",
+};
+
+const resolveOmadaDeviceStatus = (attrs: Record<string, unknown>, isOnline: boolean) => {
+  const category = toNumber(attrs.status_category);
+  if (category !== null && category in OMADA_STATUS_CATEGORY_LABELS) {
+    return OMADA_STATUS_CATEGORY_LABELS[category];
+  }
+  const status = attrs.status;
+  if (typeof status === "string" && status.trim().length > 0) return status;
+  const code = toNumber(status);
+  if (code !== null) return OMADA_STATUS_CODE_LABELS[code] ?? String(code);
+  // ha-omada drops falsy attributes, so a disconnected device has neither status field.
+  if (toText(attrs.type)) return isOnline ? "Connected" : "Disconnected";
+  return "—";
 };
 
 const normalizeBand = (attrs: Record<string, unknown>): OmadaBandType => {
@@ -104,6 +202,7 @@ const normalizeBand = (attrs: Record<string, unknown>): OmadaBandType => {
 
 const resolveConnection = (
   attrs: Record<string, unknown>,
+  assumeWireless = false,
 ): { label: string; type: OmadaConnectionType } => {
   const guest = attrs.guest === true || String(attrs.guest).toLowerCase() === "true";
   const wireless =
@@ -162,6 +261,7 @@ const resolveConnection = (
   if (deviceTypeText === "gateway") return { label: "Gateway", type: "unknown" };
   if (deviceTypeText === "switch") return { label: "Switch", type: "unknown" };
   if (deviceTypeText === "ap") return { label: "Access Point", type: "unknown" };
+  if (assumeWireless) return { label: "WiFi", type: "wifi" };
   if (attrs.ip !== undefined || attrs.ip_address !== undefined || attrs.mac !== undefined) {
     return { label: "Wired", type: "wired" };
   }
@@ -323,7 +423,12 @@ const enrichRowWithDevice = (
 const pickStatusFromStates = (states: HassEntity[]): { isOnline: boolean; raw: string } => {
   for (const state of states) {
     const normalized = String(state.state ?? "").toLowerCase();
-    if (STATUS_ONLINE.has(normalized)) return { isOnline: true, raw: state.state };
+    if (isDeviceTrackerEntity(state)) {
+      return { isOnline: isTrackerStateOnline(normalized), raw: state.state };
+    }
+    if (normalized === "on" || normalized === "connected") {
+      return { isOnline: true, raw: state.state };
+    }
     if (normalized === "off" || normalized === "not_home") {
       return { isOnline: false, raw: state.state };
     }
@@ -544,6 +649,9 @@ const buildRowFromDeviceOnlyStates = (
     connectionType: normalizedType === "—" ? "wired" : "unknown",
     band: "—",
     bandType: "unknown",
+    apName: "—",
+    apNameValue: null,
+    apIsMainNode: false,
     ip: safeString(attrs.ip ?? attrs.ip_address ?? "—"),
     mac: safeString(
       attrs.mac ??
@@ -591,6 +699,12 @@ const buildRowFromDeviceOnlyStates = (
     snrValue: metrics?.snr ?? null,
     powerSave: "—",
     powerSaveValue: null,
+    channel: "—",
+    channelValue: null,
+    wifiMode: "—",
+    wifiModeValue: null,
+    lastSeen: "—",
+    lastSeenValue: null,
     deviceType: normalizedType,
     deviceModel: safeString(device?.model ?? attrs.model ?? attrs.device_model ?? "—"),
     deviceFirmware: safeString(device?.sw_version ?? attrs.firmware ?? attrs.firmware_version ?? "—"),
@@ -650,14 +764,31 @@ export const mapOmadaStateToRow = (
   state: HassEntity,
   speedUnit: "MBps" | "Mbps",
   metrics?: OmadaClientMetrics,
+  options?: OmadaRowOptions,
 ): MappedTrackerRow => {
   const attrs = state.attributes as Record<string, unknown>;
   const nameRaw = safeString(attrs.friendly_name ?? attrs.name ?? state.entity_id);
-  const isOnline = STATUS_ONLINE.has(state.state);
-  const { label: connection, type: connectionType } = resolveConnection(attrs);
+  const isOnline = isTrackerStateOnline(state.state);
+  const { label: connection, type: connectionType } = resolveConnection(
+    attrs,
+    options?.assumeWirelessClients === true,
+  );
   const bandType = normalizeBand(attrs);
+  const deviceTypeRaw = toText(attrs.type);
   const band =
-    bandType === "2g" ? "2G" : bandType === "5g" ? "5G" : bandType === "6g" ? "6G" : "—";
+    bandType === "2g"
+      ? "2G"
+      : bandType === "5g"
+        ? "5G"
+        : bandType === "6g"
+          ? "6G"
+          : deviceTypeRaw
+            ? resolveDeviceRadioBands(attrs)
+            : "—";
+  const apName = plainApName(attrs.ap_name ?? attrs.apName);
+  const channelValue = toNumber(attrs.channel);
+  const wifiMode = mapWifiMode(attrs.wifi_mode ?? attrs.wifiMode);
+  const lastSeenValue = parseLastSeenMs(attrs.last_seen ?? attrs.lastSeen);
 
   const ip = safeString(attrs.ip ?? attrs.ip_address ?? "—");
   const mac = safeString(attrs.mac ?? attrs.mac_address ?? attrs.client_mac ?? "—");
@@ -725,7 +856,6 @@ export const mapOmadaStateToRow = (
         : null;
   const powerSave =
     powerSaveValue === 1 ? "On" : powerSaveValue === 0 ? "Off" : "—";
-  const deviceTypeRaw = toText(attrs.type);
   const deviceType =
     deviceTypeRaw.toLowerCase() === "ap"
       ? "Access Point"
@@ -736,7 +866,7 @@ export const mapOmadaStateToRow = (
           : safeString(attrs.connect_dev_type ?? attrs.connectDevType ?? "—");
   const deviceModel = safeString(attrs.model ?? attrs.device_model ?? "—");
   const deviceFirmware = safeString(attrs.firmware ?? attrs.firmware_version ?? "—");
-  const deviceStatus = safeString(attrs.status ?? attrs.status_category ?? "—");
+  const deviceStatus = resolveOmadaDeviceStatus(attrs, isOnline);
 
   return {
     entity_id: state.entity_id,
@@ -750,6 +880,9 @@ export const mapOmadaStateToRow = (
     connectionType,
     band,
     bandType,
+    apName: apName ?? "—",
+    apNameValue: apName,
+    apIsMainNode: false,
     ip,
     mac,
     hostname,
@@ -780,6 +913,12 @@ export const mapOmadaStateToRow = (
     snrValue,
     powerSave,
     powerSaveValue,
+    channel: channelValue !== null ? String(channelValue) : "—",
+    channelValue,
+    wifiMode: wifiMode.label,
+    wifiModeValue: wifiMode.generation,
+    lastSeen: formatDateTime(lastSeenValue, options?.locale),
+    lastSeenValue,
     deviceType,
     deviceModel,
     deviceFirmware,
@@ -794,13 +933,14 @@ export const buildOmadaRows = (
   entryId: string | undefined,
   registryFailed: boolean,
   speedUnit: "MBps" | "Mbps",
+  options?: OmadaRowOptions,
 ): MappedTrackerRow[] => {
   if (!entryId) return [];
 
   if (!registryFailed && entityRegistry.length === 0) return [];
   if (registryFailed || entityRegistry.length === 0) {
     return selectOmadaTrackers(allStates, entityRegistry, entryId, registryFailed).map((tracker) =>
-      mapOmadaStateToRow(tracker, speedUnit),
+      mapOmadaStateToRow(tracker, speedUnit, undefined, options),
     );
   }
 
@@ -842,7 +982,7 @@ export const buildOmadaRows = (
       const row = enrichRowWithControllerClientLookup(
         applyOmadaDeviceContext(
           {
-            ...mapOmadaStateToRow(tracker, speedUnit, metrics),
+            ...mapOmadaStateToRow(tracker, speedUnit, metrics, options),
             deviceId,
           },
           states,

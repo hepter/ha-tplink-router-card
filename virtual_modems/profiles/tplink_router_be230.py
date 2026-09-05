@@ -16,6 +16,32 @@ from fastapi.responses import HTMLResponse, JSONResponse
 from ..shared.rsa_session import RsaKeyPair, parse_form_body
 from ..shared.request_logging import install_request_logging
 
+WIRELESS_BANDS = (
+    "wireless_2g",
+    "wireless_5g",
+    "wireless_6g",
+    "guest_2g",
+    "guest_5g",
+    "guest_6g",
+    "iot_2g",
+    "iot_5g",
+    "iot_6g",
+)
+
+WIRELESS_TEXT_KEYS = (
+    "ssid",
+    "hidden",
+    "encryption",
+    "psk_version",
+    "psk_cipher",
+    "psk_key",
+    "hwmode",
+    "htmode",
+    "txpower",
+    "portal_enable",
+    "portal_password",
+)
+
 
 def _load_fixture() -> dict[str, Any]:
     file_path = Path(__file__).resolve().parents[1] / "data" / "tplink_router_be230.json"
@@ -51,6 +77,13 @@ class TplinkRouterBe230Mock:
         offset = int(flap.get("offset_seconds", 0) or 0)
         phase = ((int(time.time()) + offset) % period) / period
         return phase < on_ratio
+
+    def _online_macs(self) -> set[str]:
+        return {
+            self._normalize_mac(str(entry.get("mac", "")))
+            for entry in self.fixture["clients"]["smart_network"]
+            if self._is_online(entry)
+        }
 
     def _runtime_smart_network(self) -> list[dict[str, Any]]:
         items: list[dict[str, Any]] = []
@@ -95,6 +128,13 @@ class TplinkRouterBe230Mock:
             return floor
         ratio = self._rand.uniform(max(0.0, 1 - spread), 1 + spread)
         return max(floor, int(base * ratio))
+
+    def _jitter_ratio(self, value: float, spread: float) -> float:
+        base = float(value or 0)
+        if base <= 0:
+            return 0.0
+        ratio = self._rand.uniform(max(0.0, 1 - spread), 1 + spread)
+        return round(max(0.01, min(0.98, base * ratio)), 4)
 
     def _randomize_runtime_client(self, item: dict[str, Any]) -> None:
         # Keep values realistic for a ~1Gbps environment while still varying per request.
@@ -173,22 +213,21 @@ class TplinkRouterBe230Mock:
 
     def handle_status_all(self) -> JSONResponse:
         router = self.fixture["router"]
-        status = self.fixture["status"]
+        status = dict(self.fixture["status"])
         clients = self.fixture["clients"]
-        smart_network = self._runtime_smart_network()
-        online_macs = {
-            self._normalize_mac(str(item.get("mac", ""))) for item in smart_network
-        }
+        online_macs = self._online_macs()
         wired = self._runtime_access_clients(clients["wired"], online_macs)
         host = self._runtime_access_clients(clients["host"], online_macs)
         guest = self._runtime_access_clients(clients["guest"], online_macs)
+        status["cpu_usage"] = self._jitter_ratio(status.get("cpu_usage", 0.2), 0.45)
+        status["mem_usage"] = self._jitter_ratio(status.get("mem_usage", 0.3), 0.25)
+        status["wan_ipv4_uptime"] = int(status.get("wan_ipv4_uptime", 0)) + int(time.time()) % 900
         payload = {
             "wan_macaddr": router["wan_macaddr"],
             "lan_macaddr": router["lan_macaddr"],
             "wan_ipv4_ipaddr": router["wan_ipv4_ipaddr"],
             "lan_ipv4_ipaddr": router["lan_ipv4_ipaddr"],
             "wan_ipv4_gateway": router["wan_ipv4_gateway"],
-            "wan_ipv4_uptime": 175000,
             "access_devices_wired": wired,
             "access_devices_wireless_host": host,
             "access_devices_wireless_guest": guest,
@@ -197,24 +236,49 @@ class TplinkRouterBe230Mock:
         return self.make_success(payload)
 
     def handle_status_perf(self) -> JSONResponse:
-        cpu_base = int(self.fixture["status"]["cpu_usage"])
-        mem_base = int(self.fixture["status"]["mem_usage"])
+        status = self.fixture["status"]
         return self.make_success(
             {
-                "cpu_usage": max(2, min(95, self._jitter(cpu_base, 0.45, floor=2))),
-                "mem_usage": max(5, min(95, self._jitter(mem_base, 0.35, floor=5))),
+                "cpu_usage": self._jitter_ratio(status.get("cpu_usage", 0.2), 0.45),
+                "mem_usage": self._jitter_ratio(status.get("mem_usage", 0.3), 0.25),
             }
         )
 
     def handle_wireless_statistics(self) -> JSONResponse:
-        smart_network = self._runtime_smart_network()
-        online_macs = {
-            self._normalize_mac(str(item.get("mac", ""))) for item in smart_network
-        }
-        return self.make_success(self._runtime_wireless_stats(online_macs))
+        return self.make_success(self._runtime_wireless_stats(self._online_macs()))
 
     def handle_smart_network(self) -> JSONResponse:
         return self.make_success(self._runtime_smart_network())
+
+    def handle_easymesh_device_list(self) -> JSONResponse:
+        nodes: list[dict[str, Any]] = []
+        for node in self.fixture["mesh"]["nodes"]:
+            item = {key: value for key, value in node.items() if key != "clients"}
+            item["client_num"] = len(node.get("clients") or [])
+            nodes.append(item)
+        return self.make_success(nodes)
+
+    def handle_easymesh_sclient_detail(self, mac: str) -> JSONResponse:
+        target = self._normalize_mac(mac)
+        online_macs = self._online_macs()
+        for node in self.fixture["mesh"]["nodes"]:
+            if self._normalize_mac(str(node.get("mac", ""))) != target:
+                continue
+            entries: list[dict[str, Any]] = []
+            for client in node.get("clients") or []:
+                client_mac = self._normalize_mac(str(client.get("mac", "")))
+                if online_macs and client_mac not in online_macs:
+                    continue
+                entries.append(copy.deepcopy(client))
+            return self.make_success(
+                {
+                    "mac": node.get("mac"),
+                    "name": node.get("name"),
+                    "role": node.get("role"),
+                    "mesh_nclient_list": entries,
+                }
+            )
+        return self.make_success({"mesh_nclient_list": []})
 
     def handle_firmware(self) -> JSONResponse:
         router = self.fixture["router"]
@@ -228,31 +292,167 @@ class TplinkRouterBe230Mock:
 
     def handle_network_ipv4(self) -> JSONResponse:
         router = self.fixture["router"]
+        ipv4 = self.fixture["ipv4"]
         return self.make_success(
             {
                 "wan_macaddr": router["wan_macaddr"],
                 "wan_ipv4_ipaddr": router["wan_ipv4_ipaddr"],
                 "wan_ipv4_gateway": router["wan_ipv4_gateway"],
-                "wan_ipv4_conntype": "dhcp",
-                "wan_ipv4_netmask": "255.255.255.0",
-                "wan_ipv4_pridns": "1.1.1.1",
-                "wan_ipv4_snddns": "8.8.8.8",
+                "wan_ipv4_conntype": ipv4["wan_ipv4_conntype"],
+                "wan_ipv4_netmask": ipv4["wan_ipv4_netmask"],
+                "wan_ipv4_pridns": ipv4["wan_ipv4_pridns"],
+                "wan_ipv4_snddns": ipv4["wan_ipv4_snddns"],
                 "lan_macaddr": router["lan_macaddr"],
                 "lan_ipv4_ipaddr": router["lan_ipv4_ipaddr"],
-                "lan_ipv4_dhcp_enable": "on",
-                "lan_ipv4_netmask": "255.255.255.0",
+                "lan_ipv4_dhcp_enable": self.fixture["status"].get("lan_ipv4_dhcp_enable", "on"),
+                "lan_ipv4_netmask": ipv4["lan_ipv4_netmask"],
+                "remote": ipv4.get("remote", "off"),
             }
         )
 
-    def handle_wifi_toggle(self, form_name: str, body: dict[str, str]) -> JSONResponse:
-        key = f"{form_name}_enable"
-        enable_raw = body.get(key)
-        if enable_raw in {"on", "off"}:
-            self.fixture["status"][key] = enable_raw
+    def handle_network_ipv6(self) -> JSONResponse:
+        return self.make_success(dict(self.fixture["ipv6"]))
+
+    def handle_network_ipv6_dynamic(self) -> JSONResponse:
+        return self.make_success(dict(self.fixture["ipv6_dynamic"]))
+
+    def handle_wireless_read(self, band: str) -> JSONResponse:
+        seed = self.fixture["wireless"].get(band, {})
+        return self.make_success(
+            {
+                f"{band}_enable": self.fixture["status"].get(f"{band}_enable", "on"),
+                f"{band}_ssid": seed.get("ssid", f"Virtual-{band}"),
+                f"{band}_hidden": seed.get("hidden", "off"),
+                f"{band}_encryption": seed.get("encryption", "psk"),
+                f"{band}_psk_version": seed.get("psk_version", "3"),
+                f"{band}_psk_cipher": seed.get("psk_cipher", "aes"),
+                f"{band}_psk_key": seed.get("psk_key", ""),
+                f"{band}_hwmode": seed.get("hwmode", "auto"),
+                f"{band}_htmode": seed.get("htmode", "auto"),
+                f"{band}_channel": str(seed.get("channel", 0)),
+                f"{band}_txpower": seed.get("txpower", "high"),
+                f"{band}_disabled_all": seed.get("disabled_all", "off"),
+                f"{band}_portal_enable": seed.get("portal_enable", "off"),
+                f"{band}_portal_password": seed.get("portal_password", ""),
+            }
+        )
+
+    def handle_wireless_write(self, band: str, params: dict[str, str]) -> JSONResponse:
+        enable = params.get(f"{band}_enable", params.get("enable"))
+        if enable in {"on", "off"}:
+            self.fixture["status"][f"{band}_enable"] = enable
+
+        seed = self.fixture["wireless"].setdefault(band, {})
+        for key in WIRELESS_TEXT_KEYS:
+            value = params.get(f"{band}_{key}")
+            if value is not None:
+                seed[key] = value
+
+        channel = params.get(f"{band}_channel")
+        if channel is not None:
+            try:
+                seed["channel"] = int(channel)
+            except (TypeError, ValueError):
+                seed["channel"] = channel
+
         return self.make_success({"updated": True})
+
+    def handle_dhcps_setting_read(self) -> JSONResponse:
+        setting = dict(self.fixture["dhcps"]["setting"])
+        setting["enable"] = self.fixture["status"].get("lan_ipv4_dhcp_enable", "on")
+        return self.make_success(setting)
+
+    def handle_dhcps_setting_write(self, params: dict[str, str]) -> JSONResponse:
+        setting = self.fixture["dhcps"]["setting"]
+        enable = params.get("enable")
+        if enable in {"on", "off"}:
+            setting["enable"] = enable
+            self.fixture["status"]["lan_ipv4_dhcp_enable"] = enable
+        for key in ("leasetime", "pri_dns", "snd_dns", "gateway", "ipaddr_start", "ipaddr_end", "domain"):
+            value = params.get(key)
+            if value:
+                setting[key] = value
+        return self.make_success({"updated": True})
+
+    def handle_dhcps_reservation(self, operation: str, params: dict[str, str]) -> JSONResponse:
+        reservations = self.fixture["dhcps"]["reservations"]
+        if operation == "insert":
+            entry = self._parse_json_param(params.get("new"))
+            if entry:
+                reservations.append(entry)
+            return self.make_success({"inserted": True})
+        if operation in {"update", "remove", "delete"}:
+            return self.make_success({"updated": True})
+        return self.make_success([copy.deepcopy(item) for item in reservations])
+
+    def handle_dhcps_clients(self) -> JSONResponse:
+        return self.make_success([copy.deepcopy(item) for item in self.fixture["dhcps"]["leases"]])
+
+    def handle_vpn_server(self, kind: str, operation: str, params: dict[str, str]) -> JSONResponse:
+        config = self.fixture["vpn"][kind]
+        if operation == "write":
+            enabled = params.get("enabled")
+            if enabled in {"on", "off"}:
+                config["enabled"] = enabled
+            return self.make_success({"updated": True})
+        return self.make_success(dict(config))
+
+    def handle_vpnconn(self, vpntype: str) -> JSONResponse:
+        key = "openvpn_clients" if vpntype == "openvpn" else "pptp_clients"
+        return self.make_success([copy.deepcopy(item) for item in self.fixture["vpn"][key]])
+
+    def handle_vpn_client_enable(self, operation: str, params: dict[str, str]) -> JSONResponse:
+        client = self.fixture["vpn"]["client"]
+        if operation == "write":
+            enable = params.get("enable")
+            if enable in {"on", "off"}:
+                client["enable"] = enable
+            return self.make_success({"updated": True})
+        return self.make_success({"enable": client["enable"]})
+
+    def handle_vpn_client_server(self, operation: str, params: dict[str, str]) -> JSONResponse:
+        servers = self.fixture["vpn"]["client"]["servers"]
+        if operation == "update":
+            new = self._parse_json_param(params.get("new"))
+            key = params.get("key") or (new or {}).get("key")
+            if new and key:
+                for index, server in enumerate(servers):
+                    if server.get("key") == key:
+                        servers[index] = {**server, **new}
+                        if new.get("enable") == "on":
+                            for other_index, other in enumerate(servers):
+                                if other_index != index:
+                                    other["enable"] = "off"
+                        break
+            return self.make_success({"updated": True})
+        return self.make_success([copy.deepcopy(item) for item in servers])
+
+    def handle_vpn_client_user_list(self, operation: str, params: dict[str, str]) -> JSONResponse:
+        users = self.fixture["vpn"]["client"]["user_list"]
+        if operation == "update":
+            new = self._parse_json_param(params.get("new"))
+            key = params.get("key") or (new or {}).get("mac")
+            if new and key:
+                target = self._normalize_mac(str(key))
+                for index, user in enumerate(users):
+                    if self._normalize_mac(str(user.get("mac", ""))) == target:
+                        users[index] = {**user, **new}
+                        break
+            return self.make_success({"updated": True})
+        return self.make_success([copy.deepcopy(item) for item in users])
 
     def handle_reboot(self) -> JSONResponse:
         return self.make_success({"reboot": "ok"})
+
+    @staticmethod
+    def _parse_json_param(raw: str | None) -> dict[str, Any] | None:
+        if not raw:
+            return None
+        try:
+            parsed = json.loads(raw)
+        except (TypeError, ValueError):
+            return None
+        return parsed if isinstance(parsed, dict) else None
 
     @staticmethod
     def extract_endpoint(path: str) -> str | None:
@@ -263,18 +463,38 @@ class TplinkRouterBe230Mock:
         return match.group(1)
 
 
+def _merge_params(query: dict[str, list[str]], body: dict[str, str]) -> dict[str, str]:
+    # The c6u JSON client repeats read-URL query params while the body carries the real
+    # operation, so body values must win.
+    merged = {key: values[-1] for key, values in query.items() if values}
+    merged.update(body)
+    return merged
+
+
+def _parse_body(raw: bytes) -> dict[str, str]:
+    text = raw.decode("utf-8", errors="ignore").strip()
+    if text.startswith("{"):
+        try:
+            parsed = json.loads(text)
+        except ValueError:
+            parsed = None
+        if isinstance(parsed, dict):
+            return {str(key): value for key, value in parsed.items()}
+    return parse_form_body(raw)
+
+
 def create_app() -> FastAPI:
     mock = TplinkRouterBe230Mock()
-    app = FastAPI(title="Virtual TP-Link Router BE230", version="0.1.0")
+    app = FastAPI(title="Virtual TP-Link Router BE230", version="0.2.0")
     install_request_logging(app, "tplink_router_be230")
 
     @app.get("/")
     async def root() -> HTMLResponse:
-        return HTMLResponse("<html><body><h1>Archer BE230 Virtual Router</h1></body></html>")
+        return HTMLResponse("<html><body><h1>Virtual Archer BE230</h1></body></html>")
 
     @app.get("/webpages/index.html")
     async def web_index() -> HTMLResponse:
-        return HTMLResponse("<html><body>Archer BE230 Admin</body></html>")
+        return HTMLResponse("<html><body>Virtual Archer BE230 Admin</body></html>")
 
     @app.get("/login.htm")
     async def login_h_tm() -> HTMLResponse:
@@ -287,8 +507,9 @@ def create_app() -> FastAPI:
     @app.post("/{full_path:path}")
     async def post_any(full_path: str, request: Request):
         body_raw = await request.body()
-        body = parse_form_body(body_raw)
+        body = _parse_body(body_raw)
         query = parse_qs(request.url.query)
+        params = _merge_params(query, body)
 
         path = f"/{full_path}"
 
@@ -306,35 +527,72 @@ def create_app() -> FastAPI:
 
         endpoint = mock.extract_endpoint(path)
         if endpoint is not None:
+            form = (query.get("form") or [params.get("form", "")])[0]
+            operation = str(params.get("operation", ""))
 
-            if endpoint.startswith("admin/status") and "form=all" in request.url.query:
+            if endpoint == "admin/status":
+                if form == "perf":
+                    return mock.handle_status_perf()
                 return mock.handle_status_all()
-            if endpoint.startswith("admin/status") and "form=perf" in request.url.query:
-                return mock.handle_status_perf()
-            if endpoint.startswith("admin/firmware"):
-                return mock.handle_firmware()
-            if endpoint.startswith("admin/network"):
-                return mock.handle_network_ipv4()
-            if endpoint.startswith("admin/wireless") and "form=statistics" in request.url.query:
-                return mock.handle_wireless_statistics()
-            if endpoint.startswith("admin/smart_network"):
-                return mock.handle_smart_network()
-            if endpoint.startswith("admin/system") and "form=reboot" in request.url.query:
-                return mock.handle_reboot()
-            if endpoint.startswith("admin/system") and "form=logout" in request.url.query:
-                return mock.make_success({"logout": "ok"})
-            if endpoint.startswith("admin/wireless") and body.get("operation") == "write":
-                form_names = query.get("form") or []
-                if form_names:
-                    form_name = form_names[-1]
-                    return mock.handle_wifi_toggle(form_name, body)
-                # Some firmwares post write operations without a named form.
-                return mock.make_success({"updated": True})
 
-            if endpoint.startswith("admin/openvpn") or endpoint.startswith("admin/pptpd"):
-                return mock.make_success({"enabled": "off"})
-            if endpoint.startswith("admin/vpnconn"):
-                return mock.make_success([])
+            if endpoint == "admin/firmware":
+                return mock.handle_firmware()
+
+            if endpoint == "admin/network":
+                if form == "status_ipv6":
+                    return mock.handle_network_ipv6()
+                if form == "wan_ipv6_dynamic":
+                    return mock.handle_network_ipv6_dynamic()
+                return mock.handle_network_ipv4()
+
+            if endpoint == "admin/smart_network":
+                return mock.handle_smart_network()
+
+            if endpoint == "admin/easymesh_network":
+                if form == "mesh_sclient_detail":
+                    return mock.handle_easymesh_sclient_detail(str(params.get("mac", "")))
+                return mock.handle_easymesh_device_list()
+
+            if endpoint == "admin/wireless":
+                if form == "statistics":
+                    return mock.handle_wireless_statistics()
+                if form in WIRELESS_BANDS:
+                    if operation == "write":
+                        return mock.handle_wireless_write(form, params)
+                    return mock.handle_wireless_read(form)
+                if operation == "write":
+                    return mock.make_success({"updated": True})
+
+            if endpoint == "admin/dhcps":
+                if form == "setting":
+                    if operation == "write":
+                        return mock.handle_dhcps_setting_write(params)
+                    return mock.handle_dhcps_setting_read()
+                if form == "reservation":
+                    return mock.handle_dhcps_reservation(operation, params)
+                if form == "client":
+                    return mock.handle_dhcps_clients()
+
+            if endpoint == "admin/openvpn":
+                return mock.handle_vpn_server("openvpn", operation, params)
+            if endpoint == "admin/pptpd":
+                return mock.handle_vpn_server("pptpd", operation, params)
+            if endpoint == "admin/vpnconn":
+                return mock.handle_vpnconn(str(params.get("vpntype", "openvpn")))
+
+            if endpoint == "admin/vpn":
+                if form == "enable":
+                    return mock.handle_vpn_client_enable(operation, params)
+                if form == "server":
+                    return mock.handle_vpn_client_server(operation, params)
+                if form == "vpn_user_list":
+                    return mock.handle_vpn_client_user_list(operation, params)
+
+            if endpoint == "admin/system":
+                if form == "reboot":
+                    return mock.handle_reboot()
+                if form == "logout":
+                    return mock.make_success({"logout": "ok"})
 
         return JSONResponse({"success": False, "data": {}, "error": "unsupported"}, status_code=404)
 

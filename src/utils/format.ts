@@ -160,6 +160,31 @@ export const formatSpeed = (value?: number | null, unit: "MBps" | "Mbps" = "MBps
   return `${mbps.toFixed(decimals)} Mbps`;
 };
 
+const DATE_TIME_FORMATTERS = new Map<string, Intl.DateTimeFormat>();
+
+const getDateTimeFormatter = (locale?: string) => {
+  const key = locale ?? "";
+  const cached = DATE_TIME_FORMATTERS.get(key);
+  if (cached) return cached;
+  const formatter = new Intl.DateTimeFormat(locale || undefined, {
+    dateStyle: "short",
+    timeStyle: "short",
+  });
+  DATE_TIME_FORMATTERS.set(key, formatter);
+  return formatter;
+};
+
+export const formatDateTime = (epochMs?: number | null, locale?: string) => {
+  if (epochMs === null || epochMs === undefined || !Number.isFinite(epochMs)) return "—";
+  const date = new Date(epochMs);
+  if (Number.isNaN(date.getTime())) return "—";
+  try {
+    return getDateTimeFormatter(locale).format(date);
+  } catch {
+    return date.toISOString();
+  }
+};
+
 export const safeString = (value: unknown) => {
   if (value === null || value === undefined) return "—";
   if (typeof value === "string" && value.trim().length === 0) return "—";

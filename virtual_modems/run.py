@@ -16,15 +16,20 @@ PROFILE_MODULES = {
     "tplink_router_be230": "virtual_modems.profiles.tplink_router_be230",
     "tplink_deco_x50": "virtual_modems.profiles.tplink_deco_x50",
     "omada_controller": "virtual_modems.profiles.omada_controller",
+    "lab": "virtual_modems.profiles.lab",
 }
 
 PROFILE_ENTRY_PATHS = {
     "tplink_router_be230": "/",
     "tplink_deco_x50": "/",
     "omada_controller": "/",
+    "lab": "/",
 }
 
-MODEM_PROFILES = {"tplink_router_be230", "tplink_deco_x50", "omada_controller"}
+MODEM_PROFILES = {"tplink_router_be230", "tplink_deco_x50", "omada_controller", "lab"}
+
+# `lab` serves these two profiles on one port; their HTTP paths do not overlap.
+LAB_PROFILES = ("omada_controller", "tplink_deco_x50")
 
 
 def _active_modem_file() -> Path:
@@ -155,6 +160,10 @@ def _fixture_path(filename: str) -> Path:
 
 
 def _print_profile_details(profile: str) -> None:
+    if profile == "lab":
+        for member in LAB_PROFILES:
+            _print_profile_details(member)
+        return
     try:
         if profile == "tplink_router_be230":
             data = json.loads(_fixture_path("tplink_router_be230.json").read_text(encoding="utf-8"))
@@ -211,10 +220,17 @@ def _print_profile_details(profile: str) -> None:
 def main() -> None:
     parser = argparse.ArgumentParser(description="Run virtual TP-Link device/controller profiles")
     parser.add_argument("profile", choices=PROFILE_MODULES.keys())
+    parser.add_argument("--host", default="0.0.0.0", help="bind address (default 0.0.0.0)")
+    parser.add_argument(
+        "--port",
+        type=int,
+        default=80,
+        help="bind port (default 80; integrations expect the default HTTP port unless the host includes one)",
+    )
     args = parser.parse_args()
 
-    host = "0.0.0.0"
-    port = 80
+    host = args.host
+    port = args.port
 
     try:
         _acquire_modem_lock(args.profile, host, port)
