@@ -180,6 +180,12 @@ updown_color: true
 show_hidden_entities: false
 header_action_render: icon
 row_action_render: icon
+header_action_groups:
+  - wifi
+  - guest
+  - reboot
+  - scanning
+  - controller
 shift_click_underline: true
 hide_header: false
 hide_filter_section: false
