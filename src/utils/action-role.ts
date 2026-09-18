@@ -34,9 +34,19 @@ const looksLikeUnnamedOmadaBlockSwitch = (context: ActionRoleContext) => {
   return normalizeName(context.entityName) === deviceName;
 };
 
+// omada_open_api names the client block switch "Network access"; its "on" state means allowed.
+const isOpenApiNetworkAccessSwitch = (context: ActionRoleContext) =>
+  context.domain === "switch" &&
+  context.integrationDomain === "omada_open_api" &&
+  (context.text.includes("network_access") || context.text.includes("network access"));
+
+export const isInvertedBlockSwitch = (context: ActionRoleContext): boolean =>
+  isOpenApiNetworkAccessSwitch(context);
+
 export const resolveActionRole = (context: ActionRoleContext): ActionRole => {
   const { text } = context;
   if (isBlockText(text)) return "block";
+  if (isOpenApiNetworkAccessSwitch(context)) return "block";
   if (text.includes("reconnect")) return "reconnect";
   if (
     text.includes("wlan optimization") ||

@@ -12,6 +12,7 @@ from typing import Any
 from fastapi import FastAPI, Request
 from fastapi.responses import HTMLResponse, JSONResponse
 
+from .omada_open_api_mock import install_open_api
 from .request_logging import install_request_logging
 
 VPN_LIST_SLUGS = {
@@ -87,6 +88,7 @@ class OmadaControllerMock:
 
         self.tokens: set[str] = set()
         self._rand = random.Random()
+        self._started_at = time.time()
 
     def _controller_aliases(self) -> set[str]:
         controller_id = str(self.controller.get("id", "")).strip()
@@ -372,6 +374,13 @@ class OmadaControllerMock:
             devices.append(current)
         return devices
 
+    # Cumulative counters must only grow between polls (HA `total_increasing` sensors), so they
+    # advance with wall-clock time at a per-client pace instead of a fresh random delta.
+    def _counter_pace(self, mac: str) -> tuple[int, int]:
+        elapsed = max(0, int(time.time() - self._started_at))
+        pace = 20_000 + (sum(mac.encode("utf-8")) * 7919) % 180_000
+        return elapsed, pace
+
     def _randomize_client_metrics(self, client: dict[str, Any]) -> None:
         wireless = bool(client.get("wireless", False))
         active = bool(client.get("active", False))
@@ -400,11 +409,12 @@ class OmadaControllerMock:
         packet_up = int(client.get("upPacket") or 0)
 
         if active:
-            traffic_down += self._rand.randint(4_000, 9_800_000)
-            traffic_up += self._rand.randint(2_000, 6_200_000)
-            duration += self._rand.randint(1, 20)
-            packet_down += self._rand.randint(10, 900)
-            packet_up += self._rand.randint(10, 700)
+            elapsed, pace = self._counter_pace(str(client.get("mac", "")))
+            traffic_down += elapsed * pace
+            traffic_up += elapsed * (pace // 3)
+            duration += elapsed
+            packet_down += elapsed * (pace // 1_400)
+            packet_up += elapsed * (pace // 2_600)
 
         client["rxRate"] = rx_rate
         client["txRate"] = tx_rate
@@ -420,9 +430,10 @@ class OmadaControllerMock:
         download = int(client.get("download") or 0)
         upload = int(client.get("upload") or 0)
         duration = int(client.get("duration") or 0)
-        download += self._rand.randint(0, 3_200_000)
-        upload += self._rand.randint(0, 2_400_000)
-        duration += self._rand.randint(0, 14)
+        elapsed, pace = self._counter_pace(str(client.get("mac", "")))
+        download += elapsed * pace
+        upload += elapsed * (pace // 3)
+        duration += elapsed
         client["download"] = max(0, download)
         client["upload"] = max(0, upload)
         client["duration"] = max(0, duration)
@@ -551,6 +562,7 @@ class OmadaControllerMock:
     def create_app(self, title: str) -> FastAPI:
         app = FastAPI(title=title, version="0.1.0")
         install_request_logging(app, "omada_controller")
+        open_api = install_open_api(app, self)
 
         @app.get("/")
         async def root():
@@ -562,6 +574,8 @@ class OmadaControllerMock:
                 f"<p>Controller version: <code>{self.version}</code> "
                 f"(openapi v2 client listing: {'on' if self.supports_openapi_v2 else 'off'})</p>"
                 f"<p>Username: <code>{self.username}</code> | Password: <code>{self.password}</code></p>"
+                f"<p>Open API (<code>omada_open_api</code>): Omada ID <code>{self.controller['id']}</code> | "
+                f"client id <code>{open_api.client_id}</code> | client secret <code>{open_api.client_secret}</code></p>"
                 "</body></html>"
             )
 
@@ -953,6 +967,10 @@ class OmadaControllerMock:
 
         @app.post("/openapi/v2/{controller_id}/sites/{site}/clients")
         async def openapi_list_clients(controller_id: str, site: str, request: Request):
+            # Same path and method for two APIs: only the Open API sends `Authorization: AccessToken=...`.
+            if open_api.owns_request(request):
+                return await open_api.list_clients_v2(controller_id, site, request)
+
             err = self._require_openapi_site(controller_id, site)
             if err:
                 return err

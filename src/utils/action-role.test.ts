@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { requiresHoldForAction, resolveActionRole } from "./action-role";
+import { isInvertedBlockSwitch, requiresHoldForAction, resolveActionRole } from "./action-role";
 
 const ctx = (
   overrides: Partial<Parameters<typeof resolveActionRole>[0]>,
@@ -128,5 +128,57 @@ describe("hold requirement", () => {
     expect(
       requiresHoldForAction(ctx({ text: "switch.er707_wan_connect_ipv4 wan connect ipv4" }), "toggle"),
     ).toBe(true);
+  });
+});
+
+describe("omada_open_api network access switch", () => {
+  const openApiClient = {
+    integrationDomain: "omada_open_api",
+    deviceHasTracker: true,
+    entityName: "vm-phone-001 Network access",
+    deviceName: "vm-phone-001",
+  };
+
+  it("treats the Network access switch as the block action with inverted polarity", () => {
+    const context = ctx({
+      text: "switch.vm_phone_001_network_access vm-phone-001 network access",
+      ...openApiClient,
+    });
+    expect(resolveActionRole(context)).toBe("block");
+    expect(isInvertedBlockSwitch(context)).toBe(true);
+    expect(requiresHoldForAction(context, "block")).toBe(true);
+  });
+
+  it("keeps the ha-omada block switches non-inverted", () => {
+    const named = ctx({ text: "switch.omada_block block", integrationDomain: "omada" });
+    expect(resolveActionRole(named)).toBe("block");
+    expect(isInvertedBlockSwitch(named)).toBe(false);
+    const unnamed = ctx({ text: "switch.john_phone john phone", ...omadaClient });
+    expect(resolveActionRole(unnamed)).toBe("block");
+    expect(isInvertedBlockSwitch(unnamed)).toBe(false);
+  });
+
+  it("does not turn other omada_open_api switches into block actions", () => {
+    for (const text of [
+      "switch.virtual_eap670_hall_led virtual eap670 hall led",
+      "switch.virtual_eap670_hall_5_ghz_radio virtual eap670 hall 5 ghz radio",
+      "switch.main_campus_site_mainnet_5g_broadcast main campus mainnet 5g broadcast",
+      "switch.core_switch_port_1_poe core switch port 1 poe",
+    ]) {
+      expect(
+        resolveActionRole(ctx({ text, ...openApiClient, deviceHasTracker: false })),
+        text,
+      ).toBe("toggle");
+    }
+  });
+
+  it("does not apply the omada_open_api naming to other integrations", () => {
+    const context = ctx({
+      text: "switch.vm_phone_001_network_access vm-phone-001 network access",
+      ...openApiClient,
+      integrationDomain: "omada",
+    });
+    expect(resolveActionRole(context)).toBe("toggle");
+    expect(isInvertedBlockSwitch(context)).toBe(false);
   });
 });

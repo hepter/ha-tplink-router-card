@@ -7,12 +7,14 @@ import {
   normalizeLinkMbps,
   safeString,
 } from "../utils/format";
+import { collapseDoubledDeviceName } from "../utils/entity-name";
 import {
   getStatusColor,
   isTrackerStateOnline,
   normalizeMac,
   plainApName,
   signalColor,
+  signalPercentColor,
   toNumber,
   type MappedTrackerRow,
 } from "./tplink";
@@ -40,6 +42,14 @@ type OmadaClientMetrics = {
   rssi: number | null;
   snr: number | null;
   uptimeSeconds: number | null;
+  signalPercent: number | null;
+  connectedTo: string | null;
+  clientCount: number | null;
+  cpuPercent: number | null;
+  memoryPercent: number | null;
+  uplinkDevice: string | null;
+  uplinkPort: string | null;
+  firmwareLatest: string | null;
 };
 
 const defaultMetrics = (): OmadaClientMetrics => ({
@@ -50,19 +60,84 @@ const defaultMetrics = (): OmadaClientMetrics => ({
   rssi: null,
   snr: null,
   uptimeSeconds: null,
+  signalPercent: null,
+  connectedTo: null,
+  clientCount: null,
+  cpuPercent: null,
+  memoryPercent: null,
+  uplinkDevice: null,
+  uplinkPort: null,
+  firmwareLatest: null,
 });
+
+const UNAVAILABLE_STATES = new Set(["unavailable", "unknown", "none", ""]);
+
+const availableText = (state: HassEntity): string | null => {
+  const text = String(state.state ?? "").trim();
+  return UNAVAILABLE_STATES.has(text.toLowerCase()) ? null : text;
+};
+
+const formatPercent = (value: number | null) =>
+  value === null ? "—" : `${Math.round(value)}%`;
+
+const formatUplink = (device: string | null, port: string | null) => {
+  if (!device) return "—";
+  return port ? `${device} / ${port}` : device;
+};
+
+const metricsFromStates = (
+  states: HassEntity[],
+  metrics: OmadaClientMetrics | undefined,
+): Pick<
+  MappedTrackerRow,
+  | "signalStrength"
+  | "signalStrengthValue"
+  | "signalStrengthColor"
+  | "clientCount"
+  | "clientCountValue"
+  | "cpu"
+  | "cpuValue"
+  | "memory"
+  | "memoryValue"
+  | "uplink"
+  | "firmwareLatest"
+> => {
+  const firmwareLatest =
+    metrics?.firmwareLatest ??
+    states
+      .filter((state) => state.entity_id.startsWith("update.") && state.state === "on")
+      .map((state) => toText((state.attributes as Record<string, unknown>).latest_version))
+      .find((value) => value.length > 0) ??
+    null;
+  return {
+    signalStrength: formatPercent(metrics?.signalPercent ?? null),
+    signalStrengthValue: metrics?.signalPercent ?? null,
+    signalStrengthColor: signalPercentColor(metrics?.signalPercent ?? null),
+    clientCount: metrics?.clientCount !== null && metrics?.clientCount !== undefined
+      ? formatNumber(metrics.clientCount)
+      : "—",
+    clientCountValue: metrics?.clientCount ?? null,
+    cpu: formatPercent(metrics?.cpuPercent ?? null),
+    cpuValue: metrics?.cpuPercent ?? null,
+    memory: formatPercent(metrics?.memoryPercent ?? null),
+    memoryValue: metrics?.memoryPercent ?? null,
+    uplink: formatUplink(metrics?.uplinkDevice ?? null, metrics?.uplinkPort ?? null),
+    firmwareLatest,
+  };
+};
 
 const isDeviceTrackerEntity = (state: HassEntity) =>
   state.entity_id.startsWith("device_tracker.");
 
 const toText = (value: unknown) => String(value ?? "").trim();
 
-const isLikelyOmadaTrackerByAttrs = (state: HassEntity) => {
+export const isLikelyOmadaTrackerByAttrs = (state: HassEntity) => {
   if (!isDeviceTrackerEntity(state)) return false;
   const attrs = state.attributes as Record<string, unknown>;
   const sourceType = String(attrs.source_type ?? "").toLowerCase();
   if (sourceType && sourceType !== "router") return false;
   // ap_name is deliberately absent: tplink_router publishes it for EasyMesh clients too.
+  // connection_type is only accepted as "wireless": tplink_deco publishes "wired" too.
   return (
     "wireless" in attrs ||
     "guest" in attrs ||
@@ -70,7 +145,11 @@ const isLikelyOmadaTrackerByAttrs = (state: HassEntity) => {
     "ap_mac" in attrs ||
     "switch_port" in attrs ||
     "channel_width" in attrs ||
-    "radio" in attrs
+    "radio" in attrs ||
+    "connected_ap" in attrs ||
+    "connected_switch" in attrs ||
+    "detail_status" in attrs ||
+    String(attrs.connection_type ?? "").toLowerCase() === "wireless"
   );
 };
 
@@ -159,8 +238,11 @@ const resolveOmadaDeviceStatus = (attrs: Record<string, unknown>, isOnline: bool
   if (typeof status === "string" && status.trim().length > 0) return status;
   const code = toNumber(status);
   if (code !== null) return OMADA_STATUS_CODE_LABELS[code] ?? String(code);
+  // omada_open_api publishes the already formatted detail status only.
+  const detailStatus = toText(attrs.detail_status);
+  if (detailStatus) return detailStatus;
   // ha-omada drops falsy attributes, so a disconnected device has neither status field.
-  if (toText(attrs.type)) return isOnline ? "Connected" : "Disconnected";
+  if (toText(attrs.type ?? attrs.device_type)) return isOnline ? "Connected" : "Disconnected";
   return "—";
 };
 
@@ -214,15 +296,18 @@ const resolveConnection = (
     attrs.switch_name !== undefined ||
     attrs.switchName !== undefined ||
     attrs.switch_mac !== undefined ||
-    attrs.switchMac !== undefined;
+    attrs.switchMac !== undefined ||
+    attrs.connected_switch !== undefined;
   const apLinked =
     attrs.ap_name !== undefined ||
     attrs.apName !== undefined ||
     attrs.ap_mac !== undefined ||
     attrs.apMac !== undefined ||
+    attrs.connected_ap !== undefined ||
     attrs.ssid !== undefined;
   const connectionText = [
     attrs.connection,
+    attrs.connection_type,
     attrs.connect_type,
     attrs.connectType,
     attrs.connect_dev_type,
@@ -232,7 +317,7 @@ const resolveConnection = (
   ]
     .map((value) => toText(value).toLowerCase())
     .join(" ");
-  const deviceTypeText = toText(attrs.type).toLowerCase();
+  const deviceTypeText = toText(attrs.type ?? attrs.device_type).toLowerCase();
 
   if (guest) return { label: "Guest", type: "guest" };
   if (wireless) return { label: "WiFi", type: "wifi" };
@@ -318,6 +403,21 @@ const resolveLinkRateRaw = (
   return null;
 };
 
+// Percentage sensors ("Signal strength" in omada_open_api) would otherwise be read as RSSI.
+const isPercentageSensor = (state: HassEntity) =>
+  String((state.attributes as Record<string, unknown>).unit_of_measurement ?? "") === "%";
+
+const isPerBandClientCounter = (text: string) =>
+  /(wired|wireless|guest|2\.4|5 ?ghz|5g|6 ?ghz|6g|total)/.test(text);
+
+const mapPercentageMetric = (state: HassEntity, text: string, target: OmadaClientMetrics) => {
+  const value = toNumber(state.state);
+  if (value === null) return;
+  if (text.includes("signal")) target.signalPercent = value;
+  else if (text.includes("cpu")) target.cpuPercent = value;
+  else if (text.includes("mem")) target.memoryPercent = value;
+};
+
 const mapSensorMetric = (state: HassEntity, target: OmadaClientMetrics) => {
   const id = state.entity_id.toLowerCase();
   const name = String((state.attributes as Record<string, unknown>).friendly_name ?? "")
@@ -325,6 +425,31 @@ const mapSensorMetric = (state: HassEntity, target: OmadaClientMetrics) => {
     .trim();
   const text = `${id} ${name}`;
 
+  if (isPercentageSensor(state)) {
+    mapPercentageMetric(state, text, target);
+    return;
+  }
+  if (text.includes("uplink_device") || text.includes("uplink device")) {
+    target.uplinkDevice = availableText(state);
+    return;
+  }
+  if (text.includes("uplink_port") || text.includes("uplink port")) {
+    target.uplinkPort = availableText(state);
+    return;
+  }
+  if (text.includes("connected_to") || text.includes("connected to")) {
+    target.connectedTo = availableText(state);
+    return;
+  }
+  if (
+    text.includes("client_num") ||
+    text.includes("connected_clients") ||
+    text.includes("connected clients") ||
+    (/\bclients\b/.test(text) && !isPerBandClientCounter(text))
+  ) {
+    target.clientCount = toNumber(state.state) ?? target.clientCount;
+    return;
+  }
   if (text.includes("downloaded") || /\bdownload\b/.test(text)) {
     target.downloadedMB = toNumber(state.state);
     return;
@@ -358,7 +483,8 @@ const mapSensorMetric = (state: HassEntity, target: OmadaClientMetrics) => {
     return;
   }
   if (text.includes("uptime") || text.includes("duration") || text.includes("connected")) {
-    target.uptimeSeconds = parseUptimeSeconds(state.state);
+    // "Connected to" / "Connection status" sensors match too; never let them erase a real uptime.
+    target.uptimeSeconds = parseUptimeSeconds(state.state) ?? target.uptimeSeconds;
   }
 };
 
@@ -389,14 +515,19 @@ const enrichRowWithDevice = (
     const kind = String(item[0] ?? "").toLowerCase();
     return kind.includes("mac");
   })?.[1];
+  const deviceName = device.name_by_user ?? device.name;
 
   return {
     ...row,
-    name: row.name === "—" ? safeString(device.name_by_user ?? device.name ?? "—") : row.name,
+    vendor: row.vendor === "—" ? safeString(device.manufacturer ?? "—") : row.vendor,
+    name:
+      row.name === "—"
+        ? safeString(deviceName ?? "—")
+        : collapseDoubledDeviceName(row.name, deviceName),
     nameRaw:
       row.nameRaw === "—"
-        ? safeString(device.name_by_user ?? device.name ?? "—")
-        : row.nameRaw,
+        ? safeString(deviceName ?? "—")
+        : collapseDoubledDeviceName(row.nameRaw, deviceName),
     mac:
       row.mac === "—"
         ? safeString(macFromConnections ?? row.mac)
@@ -457,15 +588,29 @@ const pickPrimaryEntity = (states: HassEntity[]): HassEntity | undefined => {
   return states[0];
 };
 
-const shouldSkipDeviceOnlyRow = (states: HassEntity[]): boolean => {
+// omada_open_api hangs site-wide sensors and switches on a pseudo device with this model.
+const OMADA_SITE_DEVICE_MODEL = "Omada Site";
+
+const shouldSkipDeviceOnlyRow = (
+  states: HassEntity[],
+  device: DeviceRegistryEntry | undefined,
+): boolean => {
   if (states.some((state) => state.entity_id.startsWith("device_tracker."))) return false;
+  if (device?.model === OMADA_SITE_DEVICE_MODEL) return true;
   // Skip only update-only groups.
   return states.every((state) => state.entity_id.startsWith("update."));
 };
 
+// omada_open_api creates RSSI / SNR / SSID sensors for wired clients too, permanently unavailable.
 const hasWirelessDeviceSignals = (states: HassEntity[]) =>
   states.some((state) => {
     const id = state.entity_id.toLowerCase();
+    if (
+      (id.startsWith("sensor.") || id.startsWith("binary_sensor.")) &&
+      UNAVAILABLE_STATES.has(String(state.state ?? "").toLowerCase())
+    ) {
+      return false;
+    }
     const attrs = state.attributes as Record<string, unknown>;
     const friendly = String(attrs.friendly_name ?? "").toLowerCase();
     const text = `${id} ${friendly}`;
@@ -483,6 +628,7 @@ const hasWirelessDeviceSignals = (states: HassEntity[]) =>
 
 const findNumberFromStates = (states: HassEntity[], keywords: string[]): number | null => {
   for (const state of states) {
+    if (isPercentageSensor(state)) continue;
     const id = state.entity_id.toLowerCase();
     const attrs = state.attributes as Record<string, unknown>;
     const friendly = String(attrs.friendly_name ?? "").toLowerCase();
@@ -607,14 +753,16 @@ const buildRowFromDeviceOnlyStates = (
   speedUnit: "MBps" | "Mbps",
   device: DeviceRegistryEntry | undefined,
 ): MappedTrackerRow | null => {
-  if (states.length === 0 || shouldSkipDeviceOnlyRow(states)) return null;
+  if (states.length === 0 || shouldSkipDeviceOnlyRow(states, device)) return null;
 
   const primary = pickPrimaryEntity(states);
   if (!primary) return null;
 
   const attrs = primary.attributes as Record<string, unknown>;
   const status = pickStatusFromStates(states);
-  const normalizedType = normalizeDeviceType(attrs.type ?? inferDeviceTypeFromModel(device?.model));
+  const normalizedType = normalizeDeviceType(
+    attrs.type ?? attrs.device_type ?? inferDeviceTypeFromModel(device?.model),
+  );
   const connectionLabel =
     normalizedType === "Gateway" || normalizedType === "Switch" || normalizedType === "Access Point"
       ? normalizedType
@@ -705,6 +853,10 @@ const buildRowFromDeviceOnlyStates = (
     wifiModeValue: null,
     lastSeen: "—",
     lastSeenValue: null,
+    ssid: "—",
+    connectedTo: metrics?.connectedTo ?? "—",
+    vendor: "—",
+    ...metricsFromStates(states, metrics),
     deviceType: normalizedType,
     deviceModel: safeString(device?.model ?? attrs.model ?? attrs.device_model ?? "—"),
     deviceFirmware: safeString(device?.sw_version ?? attrs.firmware ?? attrs.firmware_version ?? "—"),
@@ -726,11 +878,21 @@ export const buildOmadaClientMetrics = (
   for (const entry of entityRegistry) {
     if (entry.config_entry_id !== entryId) continue;
     if (!entry.device_id) continue;
-    if (!entry.entity_id.startsWith("sensor.")) continue;
+    const isSensor = entry.entity_id.startsWith("sensor.");
+    const isUpdate = entry.entity_id.startsWith("update.");
+    if (!isSensor && !isUpdate) continue;
     const state = allStates[entry.entity_id];
     if (!state) continue;
     if (!byDevice.has(entry.device_id)) byDevice.set(entry.device_id, defaultMetrics());
-    mapSensorMetric(state, byDevice.get(entry.device_id) as OmadaClientMetrics);
+    const target = byDevice.get(entry.device_id) as OmadaClientMetrics;
+    if (isUpdate) {
+      if (state.state === "on") {
+        const latest = toText((state.attributes as Record<string, unknown>).latest_version);
+        if (latest) target.firmwareLatest = latest;
+      }
+      continue;
+    }
+    mapSensorMetric(state, target);
   }
 
   return byDevice;
@@ -774,7 +936,7 @@ export const mapOmadaStateToRow = (
     options?.assumeWirelessClients === true,
   );
   const bandType = normalizeBand(attrs);
-  const deviceTypeRaw = toText(attrs.type);
+  const deviceTypeRaw = toText(attrs.type ?? attrs.device_type);
   const band =
     bandType === "2g"
       ? "2G"
@@ -785,7 +947,14 @@ export const mapOmadaStateToRow = (
           : deviceTypeRaw
             ? resolveDeviceRadioBands(attrs)
             : "—";
-  const apName = plainApName(attrs.ap_name ?? attrs.apName);
+  const apName = plainApName(attrs.ap_name ?? attrs.apName ?? attrs.connected_ap);
+  const ssid = safeString(attrs.ssid ?? "—");
+  const connectedTo =
+    apName ??
+    (toText(attrs.switch_name ?? attrs.switchName ?? attrs.connected_switch) ||
+      toText(attrs.gateway_name ?? attrs.gatewayName) ||
+      metrics?.connectedTo ||
+      "—");
   const channelValue = toNumber(attrs.channel);
   const wifiMode = mapWifiMode(attrs.wifi_mode ?? attrs.wifiMode);
   const lastSeenValue = parseLastSeenMs(attrs.last_seen ?? attrs.lastSeen);
@@ -919,6 +1088,10 @@ export const mapOmadaStateToRow = (
     wifiModeValue: wifiMode.generation,
     lastSeen: formatDateTime(lastSeenValue, options?.locale),
     lastSeenValue,
+    ssid,
+    connectedTo,
+    vendor: safeString(attrs.vendor ?? "—"),
+    ...metricsFromStates([], metrics),
     deviceType,
     deviceModel,
     deviceFirmware,
@@ -977,6 +1150,9 @@ export const buildOmadaRows = (
     const tracker = states.find((state) => state.entity_id.startsWith("device_tracker."));
     const metrics = deviceId ? metricsByDevice.get(deviceId) : undefined;
     const device = deviceId ? devicesById.get(deviceId) : undefined;
+
+    // Device-less controls (omada_open_api site LED / WLAN optimization) describe no client.
+    if (!tracker && !deviceId) continue;
 
     if (tracker) {
       const row = enrichRowWithControllerClientLookup(

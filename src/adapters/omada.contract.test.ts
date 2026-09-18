@@ -4,6 +4,7 @@ import { describe, expect, it } from "vitest";
 import {
   buildOmadaRows,
   buildOmadaClientMetrics,
+  isLikelyOmadaTrackerByAttrs,
   mapOmadaStateToRow,
   selectOmadaTrackers,
 } from "./omada";
@@ -423,5 +424,177 @@ describe("omada adapter contract fixtures", () => {
     expect(wifi?.snr).toBe("—");
     expect(wifi?.powerSave).toBe("—");
     expect(wifi?.deviceId).toBe("dev-client-wifi");
+  });
+});
+
+describe("omada_open_api adapter contract fixture", () => {
+  type Fixture = {
+    entryId: string;
+    states: Record<string, HassEntity>;
+    entityRegistry: EntityRegistryEntry[];
+    deviceRegistry: DeviceRegistryEntry[];
+  };
+  const fixture = loadFixture<Fixture>("omada_open_api_entry.json");
+  const rows = buildOmadaRows(
+    fixture.states,
+    fixture.entityRegistry,
+    fixture.deviceRegistry,
+    fixture.entryId,
+    false,
+    "MBps",
+    { locale: "en" },
+  );
+  const byEntity = new Map(rows.map((row) => [row.entity_id, row] as const));
+
+  it("builds one row per client and infrastructure tracker and skips the site pseudo device", () => {
+    expect(rows.map((row) => row.entity_id).sort()).toEqual([
+      "device_tracker.virtual_eap670_hall",
+      "device_tracker.virtual_er7212pc_gateway",
+      "device_tracker.vm_cam_007",
+      "device_tracker.vm_desk_001",
+      "device_tracker.vm_phone_001",
+    ]);
+    expect(rows.some((row) => row.name.includes("Site"))).toBe(false);
+  });
+
+  it("collapses the doubled has_entity_name friendly name back to the device name", () => {
+    expect(byEntity.get("device_tracker.vm_phone_001")?.name).toBe("vm-phone-001");
+    expect(byEntity.get("device_tracker.virtual_eap670_hall")?.name).toBe("Virtual EAP670 Hall");
+  });
+
+  it("maps a wireless client from tracker attributes and sibling sensors", () => {
+    const phone = byEntity.get("device_tracker.vm_phone_001");
+    expect(phone).toBeDefined();
+    expect(phone?.isOnline).toBe(true);
+    expect(phone?.connection).toBe("WiFi");
+    expect(phone?.connectionType).toBe("wifi");
+    expect(phone?.band).toBe("5G");
+    expect(phone?.apName).toBe("Virtual EAP670 Hall");
+    expect(phone?.apIsMainNode).toBe(false);
+    expect(phone?.ip).toBe("192.168.60.21");
+    expect(phone?.mac).toBe("02:56:4d:03:10:01");
+    expect(phone?.hostname).toBe("vm-phone-001");
+    expect(phone?.signal).toBe("-46 dBm");
+    expect(phone?.snr).toBe("18 dB");
+    expect(phone?.downSpeed).toBe("0.96 MB/s");
+    expect(phone?.upSpeed).toBe("0.12 MB/s");
+    expect(phone?.downloadedValue).toBeCloseTo(4483.219216 * 1024 * 1024, 0);
+    expect(phone?.uploadedValue).toBeCloseTo(893.208677 * 1024 * 1024, 0);
+    expect(phone?.onlineTimeValue ?? 0).toBeGreaterThan(0);
+    expect(phone?.powerSave).toBe("Off");
+    expect(phone?.channel).toBe("—");
+    expect(phone?.wifiMode).toBe("—");
+  });
+
+  it("ignores the percentage signal sensor and the text sensors that share keywords", () => {
+    const phone = byEntity.get("device_tracker.vm_phone_001");
+    // "Signal strength" (80 %) is listed after RSSI, "Connected to" after Uptime.
+    expect(phone?.signalValue).toBe(-46);
+    expect(phone?.onlineTimeValue).not.toBeNull();
+  });
+
+  it("maps a wired client attached to a switch", () => {
+    const desk = byEntity.get("device_tracker.vm_desk_001");
+    expect(desk?.connection).toBe("Wired");
+    expect(desk?.connectionType).toBe("wired");
+    expect(desk?.apName).toBe("—");
+    expect(desk?.band).toBe("—");
+    expect(desk?.signal).toBe("—");
+    expect(desk?.snr).toBe("—");
+    expect(desk?.downSpeed).toBe("3.78 MB/s");
+    expect(desk?.hostname).toBe("vm-desk-001");
+  });
+
+  it("keeps blocked offline clients in the table", () => {
+    const cam = byEntity.get("device_tracker.vm_cam_007");
+    expect(cam?.isOnline).toBe(false);
+    expect(cam?.connection).toBe("Wired");
+    expect(cam?.ip).toBe("—");
+    expect(cam?.mac).toBe("02:56:4d:03:10:7f");
+  });
+
+  it("maps infrastructure trackers through device_type, model, firmware and detail_status", () => {
+    const ap = byEntity.get("device_tracker.virtual_eap670_hall");
+    expect(ap?.deviceType).toBe("Access Point");
+    expect(ap?.connection).toBe("Access Point");
+    expect(ap?.deviceModel).toBe("EAP670");
+    expect(ap?.deviceFirmware).toBe("5.1.6 (virtual)");
+    expect(ap?.deviceStatus).toBe("Connected");
+    expect(ap?.isOnline).toBe(true);
+
+    const gateway = byEntity.get("device_tracker.virtual_er7212pc_gateway");
+    expect(gateway?.deviceType).toBe("Gateway");
+    expect(gateway?.connection).toBe("Gateway");
+    expect(gateway?.ip).toBe("192.168.1.1");
+  });
+
+  it("recognises omada_open_api trackers by attributes without treating deco wired trackers as omada", () => {
+    expect(isLikelyOmadaTrackerByAttrs(fixture.states["device_tracker.vm_phone_001"])).toBe(true);
+    expect(isLikelyOmadaTrackerByAttrs(fixture.states["device_tracker.vm_desk_001"])).toBe(true);
+    expect(isLikelyOmadaTrackerByAttrs(fixture.states["device_tracker.virtual_eap670_hall"])).toBe(
+      true,
+    );
+    expect(
+      isLikelyOmadaTrackerByAttrs({
+        entity_id: "device_tracker.deco_client",
+        state: "home",
+        attributes: {
+          source_type: "router",
+          connection_type: "wired",
+          interface: "main",
+          deco_device: "Living Room",
+        },
+      }),
+    ).toBe(false);
+  });
+
+  it("maps the controller signal quality percentage into its own coloured column", () => {
+    const phone = byEntity.get("device_tracker.vm_phone_001");
+    expect(phone?.signalStrength).toBe("80%");
+    expect(phone?.signalStrengthValue).toBe(80);
+    expect(phone?.signalStrengthColor).toBe("var(--signal-excellent)");
+    expect(phone?.signalValue).toBe(-46);
+    const desk = byEntity.get("device_tracker.vm_desk_001");
+    expect(desk?.signalStrength).toBe("—");
+    expect(desk?.signalStrengthValue).toBeNull();
+  });
+
+  it("fills ssid, connected device and vendor for clients", () => {
+    const phone = byEntity.get("device_tracker.vm_phone_001");
+    expect(phone?.ssid).toBe("MainNet 5G");
+    expect(phone?.connectedTo).toBe("Virtual EAP670 Hall");
+    expect(phone?.vendor).toBe("Apple");
+    const desk = byEntity.get("device_tracker.vm_desk_001");
+    expect(desk?.ssid).toBe("—");
+    expect(desk?.connectedTo).toBe("Virtual SG3428XMPP Core Switch");
+    expect(desk?.vendor).toBe("Dell");
+    // No tracker attribute names the gateway, only the "Connected to" sensor does.
+    expect(byEntity.get("device_tracker.vm_cam_007")?.connectedTo).toBe("Virtual ER7212PC Gateway");
+  });
+
+  it("fills client count, cpu, memory, uplink and pending firmware for infrastructure rows", () => {
+    const ap = byEntity.get("device_tracker.virtual_eap670_hall");
+    expect(ap?.clientCount).toBe("37");
+    expect(ap?.clientCountValue).toBe(37);
+    expect(ap?.cpu).toBe("12%");
+    expect(ap?.memory).toBe("41%");
+    expect(ap?.uplink).toBe("Virtual SG3428XMPP Core Switch / 5");
+    expect(ap?.firmwareLatest).toBe("5.2.0 (virtual)");
+    expect(ap?.deviceFirmware).toBe("5.1.6 (virtual)");
+    expect(ap?.vendor).toBe("TP-Link");
+    // Per-band counters and radio utilisation must not leak into the totals.
+    expect(ap?.clientCountValue).not.toBe(21);
+    expect(ap?.cpuValue).toBe(12);
+    const gateway = byEntity.get("device_tracker.virtual_er7212pc_gateway");
+    expect(gateway?.clientCount).toBe("—");
+    expect(gateway?.firmwareLatest).toBeNull();
+    expect(byEntity.get("device_tracker.vm_phone_001")?.cpu).toBe("—");
+  });
+
+  it("falls back to attribute sniffing for omada_open_api trackers when the registry failed", () => {
+    const trackers = selectOmadaTrackers(fixture.states, [], fixture.entryId, true);
+    const ids = trackers.map((item) => item.entity_id);
+    expect(ids).toContain("device_tracker.vm_phone_001");
+    expect(ids).toContain("device_tracker.virtual_eap670_hall");
   });
 });

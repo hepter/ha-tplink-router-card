@@ -16,7 +16,7 @@ Behavior-based contract fixtures used by adapter tests.
 ## Structure
 - `fixtures/tplink_router/`: payloads for `tplink_router` adapter contracts.
 - `fixtures/tplink_deco/`: payloads for `tplink_deco` adapter contracts.
-- `fixtures/omada/`: payloads for Omada adapter contracts.
+- `fixtures/omada/`: payloads for Omada adapter contracts (`omada`, `tplink_omada`, `omada_open_api`; `omada_open_api_entry.json` mirrors the entity, attribute and device registry shapes of `ha-omada-open-api` 1.10.x).
 
 ## TP-Link Router minimum shape
 

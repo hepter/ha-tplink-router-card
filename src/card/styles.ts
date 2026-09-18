@@ -703,6 +703,32 @@ export const cardStyles = css`
     border-radius: 50%;
   }
 
+  .signal-strength-bar {
+    display: inline-block;
+    width: 44px;
+    height: 6px;
+    border-radius: 3px;
+    background: color-mix(in srgb, var(--secondary-text-color) 22%, transparent);
+    overflow: hidden;
+  }
+
+  .signal-strength-fill {
+    display: block;
+    height: 100%;
+    border-radius: 3px;
+  }
+
+  .firmware-cell {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+  }
+
+  .firmware-update-badge {
+    --mdc-icon-size: 14px;
+    color: var(--warning-color, #e0a100);
+  }
+
   .band-pill {
     display: inline-flex;
     align-items: center;

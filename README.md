@@ -16,9 +16,10 @@ A Lovelace card for Home Assistant focused on TP-Link client monitoring and quic
 
 **📊 Rich Data Visualization**
 - **Live Client Table:** Real-time mapping directly from router `device_tracker` entities.
-- **Access Point Column:** See which mesh node / access point each client is attached to (`tplink_router` EasyMesh, `tplink_deco`, `omada`), with a badge for clients on the main router.
+- **Access Point Column:** See which mesh node / access point each client is attached to (`tplink_router` EasyMesh, `tplink_deco`, `omada`, `omada_open_api`), with a badge for clients on the main router.
 - **Smart Formatting:** Human-readable formatting for traffic, link rates, duration, and signal quality.
 - **Colorized Metrics:** Optional color scales for TX/RX and Up/Down speeds for quick visual scanning.
+- **Signal Quality:** `omada_open_api` clients get the controller's signal quality percentage as a coloured bar next to RSSI; Omada rows can also show SSID, the connected AP / switch, vendor, per-device client count, CPU / memory load, uplink and a pending firmware update badge.
 - **Advanced Tooltips:** Hover over Up/Down speeds for a detailed utilization bar, bandwidth load percentage, adaptive transfer units, and current/max Mbps.
 
 **🎛️ Interactive Controls & Actions**
@@ -31,7 +32,7 @@ A Lovelace card for Home Assistant focused on TP-Link client monitoring and quic
 
 **🖱️ Advanced Navigation & Shortcuts**
 - **Shift + Click Entity Access:** Hold `Shift` and click on metric cells (like speed, traffic, signal) to instantly open the underlying Home Assistant entity's more-info dialog.
-- **Name-Cell Navigation:** Click a device name to open its entity more-info (`tplink_router` / `tplink_deco`) or device page (`omada`).
+- **Name-Cell Navigation:** Click a device name to open its entity more-info (`tplink_router` / `tplink_deco`) or device page (`omada` / `omada_open_api` / `tplink_omada`).
 - **Inline Shortcuts:** Quick device shortcut icons directly in the Name column.
 
 **🎨 Flexible & Responsive Layout**
@@ -78,12 +79,14 @@ Headless + no filter layout: both header and filter row are hidden for a compact
   - [`home-assistant-tplink-router`](https://github.com/AlexandrErohin/home-assistant-tplink-router) (`tplink_router`)
   - [`ha-tplink-deco`](https://github.com/amosyuen/ha-tplink-deco) (`tplink_deco`)
   - [`ha-omada`](https://github.com/zachcheatham/ha-omada) (`omada`)
+  - [`ha-omada-open-api`](https://github.com/bullitt186/ha-omada-open-api) (`omada_open_api`)
   - Home Assistant Core `tplink_omada` (`tplink_omada`)
 
 Support level summary:
 - `tplink_router`: full support
 - `tplink_deco`: high support
 - `omada`: high support
+- `omada_open_api`: high support
 - `tplink_omada`: basic support (Home Assistant Core publishes only a small client attribute set)
 
 Detailed matrix: `docs/integration-support.md`
@@ -109,8 +112,17 @@ Detailed matrix: `docs/integration-support.md`
   - Numeric device `status` / `status_category` codes are shown as labels (`Connected`, `Heartbeat Missed`, `Configuring`, ...); access point rows list their radios (`2.4G/5G/6G`) in `band`.
   - Extra Omada columns:
     - `downloaded`, `uploaded`, `snr`, `powerSave`
-    - `deviceType`, `deviceModel`, `deviceFirmware`, `deviceStatus`
-    - optional (add to `column_layout`): `apName`, `channel`, `wifiMode`, `lastSeen`
+    - `deviceType`, `deviceModel`, `deviceFirmware`, `deviceStatus` (a pending firmware update shows a badge in `deviceFirmware`)
+    - optional (add to `column_layout`): `apName`, `channel`, `wifiMode`, `lastSeen`, `ssid`, `connectedTo` (AP for wireless, switch for wired clients), `cpu`, `memory` (device rows)
+
+- Omada (`omada_open_api`, HACS `ha-omada-open-api`):
+  - Client rows come from the integration's trackers (`connection_type`, `connected_ap`, `connected_switch`, `ssid`) joined with the per-client sensors (RSSI, SNR, downloaded/uploaded, RX/TX activity, uptime) and the `Power save` binary sensor.
+  - Access points, switches and the gateway are rows too: `deviceType`, `deviceModel`, `deviceFirmware` and `deviceStatus` come from the device tracker attributes; the site pseudo device is not listed.
+  - The `actions` column offers the client `Network access` switch as the block action (hold to confirm) and the `Reconnect` button. The integration's switch is on while the client is allowed; the card shows it in the same blocked/allowed colours as the other Omada integrations.
+  - Header actions: AP radio switches (`2.4 GHz radio`, `5 GHz radio`, `6 GHz radio`) in `wifi`, per-AP SSID switches by SSID name (`wifi` / `guest` / `iot`), device `Reboot` buttons, and the site `WLAN optimization` button in `controller`.
+  - `signalStrength` shows the controller's signal quality (the integration's `Signal strength` percentage sensor) as a coloured bar next to the RSSI `signal` column; it is part of the default layout for this integration.
+  - Extra columns: `downloaded`, `uploaded`, `snr`, `powerSave`, `deviceType`, `deviceModel`, `deviceFirmware` (with a badge when the `update` entity reports a newer firmware), `deviceStatus`; optional `apName`, `ssid`, `connectedTo` (AP, switch or gateway name), `vendor` (client manufacturer from the device registry), `clients` (connected client count of an AP / switch / gateway), `cpu`, `memory`, `uplink` (uplink device and port of an AP / switch). `channel`, `wifiMode`, `lastSeen`, packet counters (`packetsSent`, `packetsReceived`) and link rates (`tx`, `rx`) are not published by the integration and are not offered.
+  - Entities exist only for the clients selected in the integration's config flow (`selected_clients`).
 
 - Omada (`tplink_omada`, Home Assistant Core):
   - Client rows come from the core scanner entities (name, hostname, IP, MAC, status only); all clients are wireless.
@@ -241,10 +253,18 @@ Integration-specific extra keys (rendered by default when no `column_layout` is 
 - powerSave
 - actions
 
+# omada_open_api (HACS ha-omada-open-api)
+- signalStrength
+- downloaded
+- uploaded
+- snr
+- powerSave
+- actions
+
 # tplink_omada (core)
 - actions
 
-# tplink_deco / omada / tplink_omada metadata
+# tplink_deco / omada / omada_open_api / tplink_omada metadata
 - deviceType
 - deviceModel
 - deviceFirmware
@@ -253,13 +273,24 @@ Integration-specific extra keys (rendered by default when no `column_layout` is 
 
 Optional keys, never part of the default layout, add them to `column_layout` when you need them:
 ```yaml
-# tplink_router (EasyMesh node), tplink_deco (parent Deco), omada (access point)
+# tplink_router (EasyMesh node), tplink_deco (parent Deco), omada / omada_open_api (access point)
 - apName
 
 # omada (HACS ha-omada) only
 - channel    # wireless channel
 - wifiMode   # WiFi 4/5/6/7 generation
 - lastSeen   # last time a disconnected client was seen
+
+# omada / omada_open_api
+- ssid         # SSID of a wireless client
+- connectedTo  # access point, switch or gateway the client hangs off
+- cpu          # CPU load of an access point / switch / gateway row
+- memory       # memory load of an access point / switch / gateway row
+
+# omada_open_api only
+- vendor   # client manufacturer
+- clients  # connected client count of an access point / switch / gateway row
+- uplink   # uplink device and port of an access point / switch row
 ```
 
 ### Recommended column presets by integration
@@ -340,6 +371,43 @@ column_layout:
   - key: actions
 ```
 
+`omada_open_api` (HACS `ha-omada-open-api`, recommended)
+```yaml
+type: custom:tplink-router-card
+entry_id: <omada_open_api_entry_id>
+column_layout:
+  - key: name
+    fixed: start
+  - key: status
+  - key: connection
+  - key: band
+  - key: ssid
+  - key: connectedTo
+  - key: ip
+  - key: mac
+  - key: hostname
+  - key: vendor
+  - key: down
+  - key: up
+  - key: online
+  - key: downloaded
+  - key: uploaded
+  - key: traffic
+  - key: signal
+  - key: signalStrength
+  - key: snr
+  - key: powerSave
+  - key: deviceType
+  - key: deviceModel
+  - key: deviceFirmware
+  - key: deviceStatus
+  - key: clients
+  - key: cpu
+  - key: memory
+  - key: uplink
+  - key: actions
+```
+
 `tplink_omada` (Home Assistant Core, recommended)
 ```yaml
 type: custom:tplink-router-card
@@ -383,7 +451,7 @@ Options:
 - `updown_color`: Enable colorized upload/download speeds.
 - `show_hidden_entities`: Show hidden switch/button entities in action areas. Default `false`.
 - `header_action_render`: Header action button style: `icon | name | icon_name`. Default `icon`. Works across all supported integrations when header actions exist.
-- `row_action_render`: Row action button style: `icon | name | icon_name`. Default `icon`. Currently effective for Omada row actions (`omada` / `tplink_omada`).
+- `row_action_render`: Row action button style: `icon | name | icon_name`. Default `icon`. Currently effective for Omada row actions (`omada` / `omada_open_api` / `tplink_omada`).
 - `header_action_groups`: Which header action groups to show. Keys: `wifi`, `guest`, `iot`, `reboot`, `scanning`, `controller`, `vpn`, `dhcp`, `wan`; `all` shows everything, an empty list hides every header action. Default `[wifi, guest, reboot, scanning, controller]`. See "Header action groups" below.
 - `shift_click_underline`: Show Shift+click underline hints for entity-clickable cells (currently Omada-only visual behavior).
 - `hide_header`: Hide the header area.
@@ -444,12 +512,12 @@ Every matched header action belongs to one group. Only the groups listed in `hea
 
 | Group | Contents | Default |
 |---|---|---|
-| `wifi` | Main Wi-Fi band switches, Omada AP radio switches | shown |
-| `guest` | Guest Wi-Fi band switches | shown |
-| `iot` | IoT Wi-Fi band switches | hidden |
+| `wifi` | Main Wi-Fi band switches, Omada AP radio switches, `omada_open_api` per-AP SSID switches whose SSID name carries a band | shown |
+| `guest` | Guest Wi-Fi band switches, `omada_open_api` SSID switches whose name contains "guest" | shown |
+| `iot` | IoT Wi-Fi band switches, `omada_open_api` SSID switches whose name contains "iot" | hidden |
 | `reboot` | Reboot / restart buttons | shown |
 | `scanning` | `tplink_router` "Router data fetching", `tplink_deco` "Polling" | shown |
-| `controller` | Omada "Reconnect All Clients", "WLAN Optimization" | shown |
+| `controller` | Omada "Reconnect All Clients", "WLAN Optimization" (`omada`, `omada_open_api`) | shown |
 | `vpn` | `tplink_router` OpenVPN, PPTP, IPsec and VPN client switches | hidden |
 | `dhcp` | `tplink_router` LAN IPv4 DHCP server switch | hidden |
 | `wan` | core `tplink_omada` gateway WAN connect switches | hidden |
@@ -468,11 +536,13 @@ header_action_groups:
 
 Every switch in the hidden groups still requires a 1-second hold once enabled. Hiding a group only removes the button from the card; the Home Assistant entity is untouched.
 
+An empty list (what the card editor stores when nothing is selected) keeps the default groups. Use `header_action_groups: [none]` to hide every header action, or `[all]` to show all groups.
+
 ### Action styling and curation
 
 `header_action_render` applies to header actions for all supported integrations.
 
-`row_action_render` applies to row-level actions, currently available for `omada` / `tplink_omada`.
+`row_action_render` applies to row-level actions, currently available for `omada` / `omada_open_api` / `tplink_omada`.
 
 - Display mode:
   - `header_action_render: icon | name | icon_name`
@@ -510,10 +580,10 @@ For local end-to-end testing with real integration setup flows, a virtual device
 
 - `virtual_modems/tplink_router_be230` (for `tplink_router`, EasyMesh with two satellites)
 - `virtual_modems/tplink_deco_x50` (for `tplink_deco`, master + two satellites)
-- `virtual_modems/omada_controller` (shared by `omada` and `tplink_omada`, optional Omada 6.x mode)
+- `virtual_modems/omada_controller` (shared by `omada`, `tplink_omada` and `omada_open_api`; serves the legacy controller API and the Omada Open API with OAuth2 client credentials on the same port, optional Omada 6.x mode)
 - `lab` profile: Omada controller and Deco X50 together on one port
 
-The mocks follow the current integration releases (`tplinkrouterc6u` 5.32.x, `ha-tplink-deco` 3.10.x, `ha-omada` 0.10.x, `tplink-omada-api` 1.5.x). Every virtual device is marked (MAC prefix `02:56:4D`, names `Virtual` / `vm-`, firmware `(virtual)`), and `virtual_modems/tools/ha_virtual_cleanup.py` lists, enables, disables, prunes or deletes the matching Home Assistant config entries in bulk. Background start/stop scripts exist for Windows and Linux.
+The mocks follow the current integration releases (`tplinkrouterc6u` 5.32.x, `ha-tplink-deco` 3.10.x, `ha-omada` 0.10.x, `ha-omada-open-api` 1.10.x, `tplink-omada-api` 1.5.x). Every virtual device is marked (MAC prefix `02:56:4D`, names `Virtual` / `vm-`, firmware `(virtual)`), and `virtual_modems/tools/ha_virtual_cleanup.py` lists, enables, disables, prunes or deletes the matching Home Assistant config entries in bulk. Background start/stop scripts exist for Windows and Linux.
 
 See `virtual_modems/README.md` for setup and run commands.
 

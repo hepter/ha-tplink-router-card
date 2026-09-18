@@ -6,7 +6,7 @@ Minimal local test profiles for real Home Assistant integration setup flows.
 
 - `tplink_router_be230` for `tplink_router`
 - `tplink_deco_x50` for `tplink_deco`
-- `omada_controller` for `omada` and `tplink_omada`
+- `omada_controller` for `omada`, `tplink_omada` and `omada_open_api` (the legacy web API and the Omada Open API are served by the same app and share one state)
 - `lab` = `omada_controller` + `tplink_deco_x50` on one port (their HTTP paths do not overlap; the router and Deco mocks both use `/cgi-bin/luci`, so `tplink_router_be230` cannot join)
 
 Only one modem profile should run at a time (the runner keeps a lock file under the temp directory).
@@ -91,7 +91,18 @@ The venv on Linux is created the same way (`python3 -m venv virtual_modems/.venv
   - password: `admin`
   - override via env: `VMODEM_OMADA_USERNAME`, `VMODEM_OMADA_PASSWORD`
   - `VMODEM_OMADA_VERSION` sets `controllerVer` (default `5.15.8`). With `6.0.1` or newer `ha-omada` switches to the `/openapi/v2` client list and receives at most 100 of the 128 virtual clients per poll, which reproduces the Omada 6.x truncation; on 5.x the openapi paths deliberately return 404.
-  - Seed: 6 devices (gateway, 2 switches, 3 access points with status codes 14/15/30/11) and 128 clients (100 wireless, 8 guest, 20 wired, 6 blocked). SSIDs keep their original names (`MainNet 2.4G/5G/6G`, `GuestNet 5G`, `IoTNet 2.4G`) because HA entries filter tracked clients by SSID.
+  - Seed: 6 devices (gateway, 2 switches, 3 access points with status codes 14/15/30/11) and 128 clients (108 wireless, 20 wired, 8 guest, 13 flapping between online and offline). Six clients (`vm-wifi-001`, `-024`, `-047`, `-070`, `-093`, `vm-wired-008`) start blocked, so the Open API `scope=3` list and the `Network access` switches have something to show from the first poll. SSIDs keep their original names (`MainNet 2.4G/5G/6G`, `GuestNet 5G`, `IoTNet 2.4G`) because HA entries filter tracked clients by SSID.
+- `omada_open_api` (served by the `omada_controller` and `lab` profiles)
+  - controller type: `Self-Hosted (Local Controller)`
+  - api url: `http://<ip>` (include protocol; leave `verify_ssl` off for plain HTTP)
+  - omada id: `oc-virtual-001`
+  - client id: `virtual-open-api`, client secret: `virtual-open-api-secret`
+  - override via env: `VMODEM_OAPI_CLIENT_ID`, `VMODEM_OAPI_CLIENT_SECRET`
+  - site: `Main Campus` (`site-main`); a wrong Omada ID answers `errorCode -7131`, a wrong secret `-44106`, an unknown access token `-44112` so the token refresh path is exercised
+  - the config flow lists only the first 200 clients and creates entities only for the clients selected in that step; the `ssid_filter` step narrows that list to the chosen SSIDs, so keep the SSID names unchanged
+  - the Open API is always available regardless of `VMODEM_OMADA_VERSION`; requests carrying an `Authorization: AccessToken=...` header take the Open API branch, everything else keeps the legacy behaviour
+  - block, unblock, LED, PoE, radio and SSID writes mutate the same state the legacy API serves, so a client blocked here shows up as blocked in `ha-omada` too
+  - the DPI application list, VPN stats and threat heatmap are served as empty pages; per-client DPI traffic and VPN peer lists answer 404, which the integration treats as unavailable data
 
 ## Debug endpoints
 

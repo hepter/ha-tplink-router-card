@@ -6,6 +6,84 @@
     "site_name": "Main Campus",
     "name": "Virtual Omada Controller: Main Campus"
   },
+  "open_api": {
+    "site": {
+      "region": "Virtual Lab",
+      "timeZone": "UTC+03:00",
+      "scenario": "Office",
+      "type": 0
+    },
+    "wlan": {
+      "id": "vm-wlan-1",
+      "name": "Virtual Default WLAN Group"
+    },
+    "ssids": [
+      {
+        "id": "vm-ssid-1",
+        "name": "MainNet 2.4G",
+        "band": 1,
+        "broadcast": true,
+        "security": 3,
+        "guestNetEnable": false
+      },
+      {
+        "id": "vm-ssid-2",
+        "name": "MainNet 5G",
+        "band": 2,
+        "broadcast": true,
+        "security": 3,
+        "guestNetEnable": false
+      },
+      {
+        "id": "vm-ssid-3",
+        "name": "MainNet 6G",
+        "band": 8,
+        "broadcast": true,
+        "security": 4,
+        "guestNetEnable": false
+      },
+      {
+        "id": "vm-ssid-4",
+        "name": "IoTNet 2.4G",
+        "band": 1,
+        "broadcast": false,
+        "security": 3,
+        "guestNetEnable": false
+      },
+      {
+        "id": "vm-ssid-5",
+        "name": "GuestNet 5G",
+        "band": 2,
+        "broadcast": true,
+        "security": 0,
+        "guestNetEnable": true
+      }
+    ],
+    "devices": {
+      "02:56:4D:03:00:01": {
+        "sn": "VM-ER7212PC-0001",
+        "temp": 48,
+        "poeBudget": 30
+      },
+      "02:56:4D:03:00:02": {
+        "sn": "VM-SG3428XMPP-0002",
+        "poeBudget": 384
+      },
+      "02:56:4D:03:00:03": {
+        "sn": "VM-EAP670-0003"
+      },
+      "02:56:4D:03:00:04": {
+        "sn": "VM-EAP653-0004"
+      },
+      "02:56:4D:03:00:05": {
+        "sn": "VM-EAP772-0005"
+      },
+      "02:56:4D:03:00:06": {
+        "sn": "VM-SG2008P-0006",
+        "poeBudget": 62
+      }
+    }
+  },
   "devices": [
     {
       "mac": "02:56:4D:03:00:01",
@@ -1628,7 +1706,7 @@
       "lastSeen": 1760660001200,
       "authStatus": 1,
       "active": true,
-      "blocked": false
+      "blocked": true
     },
     {
       "mac": "02:56:4D:03:10:02",
@@ -2857,7 +2935,7 @@
       "lastSeen": 1760660028800,
       "authStatus": 2,
       "active": true,
-      "blocked": false
+      "blocked": true
     },
     {
       "mac": "02:56:4D:03:10:19",
@@ -4086,7 +4164,7 @@
       "lastSeen": 1760660056400,
       "authStatus": 3,
       "active": true,
-      "blocked": false
+      "blocked": true
     },
     {
       "mac": "02:56:4D:03:10:30",
@@ -5315,7 +5393,7 @@
       "lastSeen": 1760660084000,
       "authStatus": 0,
       "active": true,
-      "blocked": false
+      "blocked": true
     },
     {
       "mac": "02:56:4D:03:10:47",
@@ -6544,7 +6622,7 @@
       "lastSeen": 1760660111600,
       "authStatus": 0,
       "active": true,
-      "blocked": false
+      "blocked": true
     },
     {
       "mac": "02:56:4D:03:10:5E",
@@ -7718,7 +7796,7 @@
       "lastSeen": 1760660104400,
       "authStatus": 0,
       "active": true,
-      "blocked": false,
+      "blocked": true,
       "connectDevType": "switch",
       "switchMac": "02:56:4D:03:00:02",
       "switchName": "Virtual SG3428XMPP Core Switch",

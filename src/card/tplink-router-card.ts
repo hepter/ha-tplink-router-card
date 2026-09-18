@@ -3,23 +3,28 @@ import { cardStyles } from "./styles";
 import { localize, localizeLabel } from "../i18n";
 import { buildDiagnosticPackage } from "../utils/export-utils";
 import {
+  DEFAULT_HEADER_ACTION_GROUPS,
   HEADER_ACTION_GROUPS,
   matchAction,
   resolveHeaderActionGroups,
   type HeaderActionGroup,
 } from "../utils/action-matcher";
-import { requiresHoldForAction, resolveActionRole } from "../utils/action-role";
+import {
+  isInvertedBlockSwitch,
+  requiresHoldForAction,
+  resolveActionRole,
+} from "../utils/action-role";
 import { selectDefaultColumnKeys } from "../utils/default-columns";
 import { buildColumnMaxWidthStyle } from "../utils/column-style";
+import { collapseDoubledDeviceName } from "../utils/entity-name";
+import { ipSortKey } from "../utils/ip-sort";
 import { buildServiceRowActions } from "../utils/service-row-actions";
 import {
   buildActionDeviceOptions,
   type ActionDeviceOption,
 } from "../utils/action-device-options";
 import { formatSpeed } from "../utils/format";
-import {
-  buildOmadaRows,
-} from "../adapters/omada";
+import { buildOmadaRows, isLikelyOmadaTrackerByAttrs } from "../adapters/omada";
 import {
   detectLinkRateUnit,
   mapTrackerStateToRow,
@@ -31,6 +36,7 @@ import {
 import {
   ALL_COLUMN_KEYS,
   getAllowedColumnsForDomain,
+  isOmadaIntegrationDomain,
 } from "../adapters/integration-profile";
 import type { MappedTrackerRow } from "../adapters/tplink";
 import type {
@@ -149,6 +155,8 @@ type ActionItem = {
   deviceId?: string;
   deviceName?: string;
   role?: "block" | "reconnect" | "wlanOptimization" | "reboot" | "toggle";
+  // Block switches whose "on" state means "allowed" (omada_open_api); isOn is already flipped.
+  inverted?: boolean;
   service?: ActionServiceCall;
 };
 
@@ -190,6 +198,7 @@ const SUPPORTED_ENTRY_DOMAINS = new Set([
   "tplink_deco",
   "omada",
   "tplink_omada",
+  "omada_open_api",
 ]);
 const SHIFT_ENTITY_CLICKABLE_COLUMNS = new Set([
   "down",
@@ -201,8 +210,15 @@ const SHIFT_ENTITY_CLICKABLE_COLUMNS = new Set([
   "online",
   "traffic",
   "signal",
+  "signalStrength",
   "snr",
   "powerSave",
+  "ssid",
+  "connectedTo",
+  "clients",
+  "cpu",
+  "memory",
+  "uplink",
 ]);
 const AUTO_REFRESH_INTERVAL_MS = 5 * 60 * 1000;// minutes
 const HIDDEN_ENTITY_POLL_INTERVAL_MS = 20 * 1000;
@@ -249,6 +265,9 @@ const parseActionBand = (text: string): "2g" | "5g" | "6g" | undefined => {
   if (/(6g|6ghz)/i.test(text)) return "6g";
   return undefined;
 };
+
+// Cells hidden for offline or wired rows must sort as empty too, or a stale RSSI wins the sort.
+const showsRadioMetrics = (row: RowData) => row.isOnline && row.connectionType !== "wired";
 
 const isEmptySortValue = (value: unknown) => {
   if (value === null || value === undefined) return true;
@@ -634,19 +653,7 @@ export class TplinkRouterCard extends LitElement {
   }
 
   private _looksLikeOmadaTracker(state: HassEntity) {
-    if (!state.entity_id.startsWith("device_tracker.")) return false;
-    const attrs = state.attributes as Record<string, unknown>;
-    const sourceType = String(attrs.source_type ?? "").toLowerCase();
-    if (sourceType && sourceType !== "router") return false;
-    return (
-      "wireless" in attrs ||
-      "guest" in attrs ||
-      "ssid" in attrs ||
-      "ap_mac" in attrs ||
-      "switch_port" in attrs ||
-      "channel_width" in attrs ||
-      "radio" in attrs
-    );
+    return isLikelyOmadaTrackerByAttrs(state);
   }
 
   private _buildIncrementalEntityCandidates(entryId: string, entryDomain?: string) {
@@ -656,7 +663,7 @@ export class TplinkRouterCard extends LitElement {
     const trackerCandidateIds = Object.values(this.hass?.states ?? {})
       .filter((state) => state.entity_id.startsWith("device_tracker."))
       .filter((state) => {
-        if (entryDomain === "omada" || entryDomain === "tplink_omada") {
+        if (this._isOmadaDomain(entryDomain)) {
           return this._looksLikeOmadaTracker(state);
         }
         const attrs = state.attributes as Record<string, unknown>;
@@ -860,9 +867,9 @@ export class TplinkRouterCard extends LitElement {
         .filter((value) => value.length > 0),
     );
 
-    if (platforms.has("omada") || platforms.has("tplink_omada")) return "omada";
-    if (platforms.has("tplink_router")) return "tplink_router";
-    if (platforms.has("tplink_deco")) return "tplink_deco";
+    for (const domain of ["omada", "tplink_omada", "omada_open_api", "tplink_router", "tplink_deco"]) {
+      if (platforms.has(domain)) return domain;
+    }
     return undefined;
   }
 
@@ -1282,7 +1289,7 @@ export class TplinkRouterCard extends LitElement {
   }
 
   private _isOmadaDomain(entryDomain: string | undefined) {
-    return entryDomain === "omada" || entryDomain === "tplink_omada";
+    return isOmadaIntegrationDomain(entryDomain);
   }
 
   private _isRouterClientDomain(entryDomain: string | undefined) {
@@ -1319,10 +1326,24 @@ export class TplinkRouterCard extends LitElement {
         return row.trafficUsage !== "—";
       case "signal":
         return row.signal !== "—";
+      case "signalStrength":
+        return row.signalStrength !== "—";
       case "snr":
         return row.snr !== "—";
       case "powerSave":
         return row.powerSave !== "—";
+      case "ssid":
+        return row.ssid !== "—";
+      case "connectedTo":
+        return row.connectedTo !== "—";
+      case "clients":
+        return row.clientCount !== "—";
+      case "cpu":
+        return row.cpu !== "—";
+      case "memory":
+        return row.memory !== "—";
+      case "uplink":
+        return row.uplink !== "—";
       default:
         return false;
     }
@@ -1382,11 +1403,9 @@ export class TplinkRouterCard extends LitElement {
           ["sensor"],
         ) ?? null;
       case "online":
-        return this._findEntityByKeywords(
-          states,
-          ["uptime", "duration", "connected"],
-          ["sensor"],
-        ) ?? null;
+        return this._findEntityByKeywords(states, ["uptime"], ["sensor"]) ??
+          this._findEntityByKeywords(states, ["duration", "connected"], ["sensor"]) ??
+          null;
       case "traffic":
         return this._findEntityByKeywords(
           states,
@@ -1398,14 +1417,46 @@ export class TplinkRouterCard extends LitElement {
       case "uploaded":
         return this._findEntityByKeywords(states, ["uploaded"], ["sensor"]) ?? null;
       case "signal":
-        return this._findEntityByKeywords(states, ["rssi", "signal"], ["sensor"]) ?? null;
+        return this._findEntityByKeywords(states, ["rssi"], ["sensor"]) ??
+          this._findEntityByKeywords(states, ["signal"], ["sensor"]) ??
+          null;
       case "snr":
         return this._findEntityByKeywords(states, ["snr"], ["sensor"]) ?? null;
+      case "signalStrength":
+        return this._findEntityByKeywords(
+          states,
+          ["signal_strength", "signal strength"],
+          ["sensor"],
+        ) ?? null;
       case "powerSave":
         return this._findEntityByKeywords(
           states,
           ["power_save", "power save"],
           ["binary_sensor", "switch"],
+        ) ?? null;
+      case "ssid":
+        return this._findEntityByKeywords(states, ["ssid"], ["sensor"]) ?? null;
+      case "connectedTo":
+        return this._findEntityByKeywords(
+          states,
+          ["connected_to", "connected to"],
+          ["sensor"],
+        ) ?? null;
+      case "clients":
+        return this._findEntityByKeywords(
+          states,
+          ["connected_clients", "connected clients", "client_num"],
+          ["sensor"],
+        ) ?? null;
+      case "cpu":
+        return this._findEntityByKeywords(states, ["cpu"], ["sensor"]) ?? null;
+      case "memory":
+        return this._findEntityByKeywords(states, ["memory", "mem_util", "mem usage"], ["sensor"]) ?? null;
+      case "uplink":
+        return this._findEntityByKeywords(
+          states,
+          ["uplink_device", "uplink device"],
+          ["sensor"],
         ) ?? null;
       default:
         return null;
@@ -1469,7 +1520,7 @@ export class TplinkRouterCard extends LitElement {
     }
     let rows: RowData[] = [];
 
-    if (entryDomain === "omada" || entryDomain === "tplink_omada") {
+    if (this._isOmadaDomain(entryDomain)) {
       rows = buildOmadaRows(
         this.hass.states,
         this._entityRegistry,
@@ -1551,14 +1602,14 @@ export class TplinkRouterCard extends LitElement {
     return states
       .map((state) => {
         const domain = state.entity_id.split(".")[0] as ActionItem["domain"];
-        const friendly = String(
-          (state.attributes as Record<string, unknown>).friendly_name ?? state.entity_id,
-        );
-        const text = `${state.entity_id} ${friendly}`.toLowerCase();
-
         const registryEntry = registryByEntity.get(state.entity_id);
         const deviceId = registryEntry?.device_id ?? registryEntry?.entity_id;
         const device = deviceId ? deviceById.get(deviceId) : undefined;
+        const friendly = collapseDoubledDeviceName(
+          String((state.attributes as Record<string, unknown>).friendly_name ?? state.entity_id),
+          device?.name_by_user ?? device?.name,
+        );
+        const text = `${state.entity_id} ${friendly}`.toLowerCase();
 
         const roleContext = {
           domain: domain as "switch" | "button",
@@ -1570,13 +1621,14 @@ export class TplinkRouterCard extends LitElement {
           deviceName: device?.name_by_user ?? device?.name,
         };
         const role = resolveActionRole(roleContext);
+        const inverted = role === "block" && isInvertedBlockSwitch(roleContext);
 
         const icon = (() => {
           const attrIcon = (state.attributes as Record<string, unknown>).icon;
           if (typeof attrIcon === "string" && attrIcon.trim().length > 0) return attrIcon;
           return domain === "button" ? "mdi:gesture-tap-button" : "mdi:toggle-switch";
         })();
-        const isOn = state.state === "on";
+        const isOn = inverted ? state.state === "off" : state.state === "on";
         const available =
           domain === "button" ? state.state !== "unavailable" : state.state !== "unavailable";
 
@@ -1592,6 +1644,7 @@ export class TplinkRouterCard extends LitElement {
           deviceId,
           deviceName: device?.name_by_user ?? device?.name,
           role,
+          inverted,
         } as ActionItem;
       })
       .filter((item): item is ActionItem => item !== null);
@@ -1787,7 +1840,8 @@ export class TplinkRouterCard extends LitElement {
       await this._callServiceWithRetry("button", "press", { entity_id: item.entity_id });
       return "button_press";
     }
-    const service = item.isOn ? "turn_off" : "turn_on";
+    const switchIsOn = item.inverted ? !item.isOn : item.isOn;
+    const service = switchIsOn ? "turn_off" : "turn_on";
     await this._callServiceWithRetry("switch", service, { entity_id: item.entity_id });
     return service === "turn_on" ? "switch_on" : "switch_off";
   }
@@ -2092,12 +2146,11 @@ export class TplinkRouterCard extends LitElement {
         card: "ha-tplink-router-card",
         version: CARD_VERSION,
         exported_at: new Date().toISOString(),
-        selected_adapter:
-          resolvedDomain === "omada" || resolvedDomain === "tplink_omada"
-            ? "omada"
-            : resolvedDomain === "tplink_deco"
-              ? "tplink_deco"
-              : "tplink_router",
+        selected_adapter: this._isOmadaDomain(resolvedDomain)
+          ? "omada"
+          : resolvedDomain === "tplink_deco"
+            ? "tplink_deco"
+            : "tplink_router",
       },
       selection: {
         entry_id: entryId ?? null,
@@ -2338,6 +2391,7 @@ export class TplinkRouterCard extends LitElement {
         key: "band",
         label: t("columns.band"),
         sort: (row: RowData) => {
+          if (!row.isOnline) return null;
           if (row.connectionType === "wired") return 0;
           if (row.bandType === "2g") return 1;
           if (row.bandType === "5g") return 2;
@@ -2346,18 +2400,25 @@ export class TplinkRouterCard extends LitElement {
           return null;
         },
       },
+      { key: "ssid", label: t("columns.ssid"), sort: (row: RowData) => row.ssid },
       {
         key: "apName",
         label: t("columns.apName"),
         sort: (row: RowData) => row.apNameValue,
       },
-      { key: "ip", label: t("columns.ip"), sort: (row: RowData) => row.ip },
+      {
+        key: "connectedTo",
+        label: t("columns.connectedTo"),
+        sort: (row: RowData) => row.connectedTo,
+      },
+      { key: "ip", label: t("columns.ip"), sort: (row: RowData) => ipSortKey(row.ip) },
       { key: "mac", label: t("columns.mac"), sort: (row: RowData) => row.mac },
       {
         key: "hostname",
         label: t("columns.hostname"),
         sort: (row: RowData) => row.hostname,
       },
+      { key: "vendor", label: t("columns.vendor"), sort: (row: RowData) => row.vendor },
       {
         key: "packetsSent",
         label: t("columns.packetsSent"),
@@ -2371,11 +2432,23 @@ export class TplinkRouterCard extends LitElement {
       {
         key: "down",
         label: t("columns.down"),
-        sort: (row: RowData) => row.downSpeedValue,
+        sort: (row: RowData) => (row.isOnline ? row.downSpeedValue : null),
       },
-      { key: "up", label: t("columns.up"), sort: (row: RowData) => row.upSpeedValue },
-      { key: "tx", label: t("columns.tx"), sort: (row: RowData) => row.txRateValue },
-      { key: "rx", label: t("columns.rx"), sort: (row: RowData) => row.rxRateValue },
+      {
+        key: "up",
+        label: t("columns.up"),
+        sort: (row: RowData) => (row.isOnline ? row.upSpeedValue : null),
+      },
+      {
+        key: "tx",
+        label: t("columns.tx"),
+        sort: (row: RowData) => (row.isOnline ? row.txRateValue : null),
+      },
+      {
+        key: "rx",
+        label: t("columns.rx"),
+        sort: (row: RowData) => (row.isOnline ? row.rxRateValue : null),
+      },
       {
         key: "online",
         label: t("columns.online"),
@@ -2401,8 +2474,21 @@ export class TplinkRouterCard extends LitElement {
         label: t("columns.traffic"),
         sort: (row: RowData) => row.trafficUsageValue,
       },
-      { key: "signal", label: t("columns.signal"), sort: (row: RowData) => row.signalValue },
-      { key: "snr", label: t("columns.snr"), sort: (row: RowData) => row.snrValue },
+      {
+        key: "signal",
+        label: t("columns.signal"),
+        sort: (row: RowData) => (showsRadioMetrics(row) ? row.signalValue : null),
+      },
+      {
+        key: "signalStrength",
+        label: t("columns.signalStrength"),
+        sort: (row: RowData) => (showsRadioMetrics(row) ? row.signalStrengthValue : null),
+      },
+      {
+        key: "snr",
+        label: t("columns.snr"),
+        sort: (row: RowData) => (showsRadioMetrics(row) ? row.snrValue : null),
+      },
       {
         key: "channel",
         label: t("columns.channel"),
@@ -2438,6 +2524,14 @@ export class TplinkRouterCard extends LitElement {
         label: t("columns.deviceStatus"),
         sort: (row: RowData) => row.deviceStatus,
       },
+      {
+        key: "clients",
+        label: t("columns.clients"),
+        sort: (row: RowData) => row.clientCountValue,
+      },
+      { key: "cpu", label: t("columns.cpu"), sort: (row: RowData) => row.cpuValue },
+      { key: "memory", label: t("columns.memory"), sort: (row: RowData) => row.memoryValue },
+      { key: "uplink", label: t("columns.uplink"), sort: (row: RowData) => row.uplink },
       {
         key: "actions",
         label: t("columns.actions"),
@@ -2615,7 +2709,7 @@ export class TplinkRouterCard extends LitElement {
       routerDetails.mac ? `MAC: ${routerDetails.mac}` : null,
     ].filter(Boolean) as string[];
     const routerInfoText = routerInfoLines.join("\n");
-    const isOmadaEntry = entryDomain === "omada" || entryDomain === "tplink_omada";
+    const isOmadaEntry = this._isOmadaDomain(entryDomain);
     const endpointLabel = isOmadaEntry ? t("card.controllerLabel") : t("card.routerLabel");
     const endpointFallback = isOmadaEntry
       ? entryTitle ?? entryId
@@ -3214,8 +3308,40 @@ export class TplinkRouterCard extends LitElement {
                   wifiMode: isOffline ? "—" : row.wifiMode,
                   deviceType: localizeLabel(this.hass, row.deviceType),
                   deviceModel: row.deviceModel ?? "—",
-                  deviceFirmware: row.deviceFirmware ?? "—",
+                  deviceFirmware: row.firmwareLatest
+                    ? html`
+                        <span class="firmware-cell">
+                          ${row.deviceFirmware ?? "—"}
+                          <ha-icon
+                            class="firmware-update-badge"
+                            icon="mdi:update"
+                            title=${t("card.firmwareUpdateAvailable", { version: row.firmwareLatest })}
+                          ></ha-icon>
+                        </span>
+                      `
+                    : row.deviceFirmware ?? "—",
                   deviceStatus: localizeLabel(this.hass, row.deviceStatus),
+                  ssid: row.ssid,
+                  connectedTo: row.connectedTo,
+                  vendor: row.vendor,
+                  clients: row.clientCount,
+                  cpu: row.cpu,
+                  memory: row.memory,
+                  uplink: row.uplink,
+                  signalStrength:
+                    isOffline || row.signalStrengthValue === null
+                      ? "—"
+                      : html`
+                          <span class="signal signal-strength">
+                            <span class="signal-strength-bar">
+                              <span
+                                class="signal-strength-fill"
+                                style=${`width:${Math.max(0, Math.min(100, row.signalStrengthValue))}%;background:${row.signalStrengthColor}`}
+                              ></span>
+                            </span>
+                            ${row.signalStrength}
+                          </span>
+                        `,
                   actions: (() => {
                     const actions: ActionItem[] = [
                       ...(row.deviceId ? rowActionsByDevice.get(row.deviceId) ?? [] : []),
@@ -3371,6 +3497,7 @@ export class TplinkRouterCard extends LitElement {
   static getStubConfig() {
     return {
       type: "custom:tplink-router-card",
+      header_action_groups: [...DEFAULT_HEADER_ACTION_GROUPS],
     };
   }
 
@@ -3414,10 +3541,13 @@ export class TplinkRouterCard extends LitElement {
       { value: "name", label: t("editor.actionRenderName") },
       { value: "icon_name", label: t("editor.actionRenderIconAndName") },
     ];
-    const headerActionGroupOptions = HEADER_ACTION_GROUPS.map((group) => ({
-      value: group,
-      label: t(`actions.groups.${group}`),
-    }));
+    const headerActionGroupOptions = [
+      ...HEADER_ACTION_GROUPS.map((group) => ({
+        value: group,
+        label: t(`actions.groups.${group}`),
+      })),
+      { value: "none", label: t("actions.groups.none") },
+    ];
     const fixedColumnOptions = [
       { value: COLUMN_FIXED_NONE, label: t("editor.columnFixedNone") },
       { value: "start", label: t("editor.columnFixedStart") },

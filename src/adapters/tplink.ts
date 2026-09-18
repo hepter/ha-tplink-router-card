@@ -83,11 +83,43 @@ export interface MappedTrackerRow {
   wifiModeValue: number | null;
   lastSeen: string;
   lastSeenValue: number | null;
+  ssid: string;
+  connectedTo: string;
+  vendor: string;
+  // Controller-normalised signal quality in percent (Omada `signalLevel`), distinct from RSSI.
+  signalStrength: string;
+  signalStrengthValue: number | null;
+  signalStrengthColor: string;
+  clientCount: string;
+  clientCountValue: number | null;
+  cpu: string;
+  cpuValue: number | null;
+  memory: string;
+  memoryValue: number | null;
+  uplink: string;
+  firmwareLatest: string | null;
   deviceType?: string;
   deviceModel?: string;
   deviceFirmware?: string;
   deviceStatus?: string;
 }
+
+export const EMPTY_EXTENDED_ROW_FIELDS = {
+  ssid: "—",
+  connectedTo: "—",
+  vendor: "—",
+  signalStrength: "—",
+  signalStrengthValue: null,
+  signalStrengthColor: "var(--secondary-text-color)",
+  clientCount: "—",
+  clientCountValue: null,
+  cpu: "—",
+  cpuValue: null,
+  memory: "—",
+  memoryValue: null,
+  uplink: "—",
+  firmwareLatest: null,
+} as const satisfies Partial<MappedTrackerRow>;
 
 export const toNumber = (value: unknown): number | null => {
   if (typeof value === "number" && Number.isFinite(value)) return value;
@@ -159,6 +191,15 @@ export const signalColor = (dbm: number | null) => {
   if (dbm <= -70) return "var(--signal-poor)";
   if (dbm <= -65) return "var(--signal-fair)";
   if (dbm <= -60) return "var(--signal-good)";
+  return "var(--signal-excellent)";
+};
+
+export const signalPercentColor = (percent: number | null) => {
+  if (percent === null) return "var(--secondary-text-color)";
+  if (percent < 25) return "var(--signal-bad)";
+  if (percent < 45) return "var(--signal-poor)";
+  if (percent < 60) return "var(--signal-fair)";
+  if (percent < 80) return "var(--signal-good)";
   return "var(--signal-excellent)";
 };
 
@@ -527,6 +568,7 @@ export const mapTrackerStateToRow = (
     wifiModeValue: null,
     lastSeen: "—",
     lastSeenValue: null,
+    ...EMPTY_EXTENDED_ROW_FIELDS,
     deviceType,
     deviceModel,
     deviceFirmware,

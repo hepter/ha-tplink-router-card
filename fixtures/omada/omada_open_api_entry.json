@@ -1,0 +1,990 @@
+{
+  "entryId": "entry-omada-open-api",
+  "states": {
+    "device_tracker.vm_phone_001": {
+      "entity_id": "device_tracker.vm_phone_001",
+      "state": "home",
+      "attributes": {
+        "source_type": "router",
+        "ip": "192.168.60.21",
+        "mac": "02:56:4d:03:10:01",
+        "host_name": "vm-phone-001",
+        "ssid": "MainNet 5G",
+        "connected_ap": "Virtual EAP670 Hall",
+        "connection_type": "wireless",
+        "friendly_name": "vm-phone-001 vm-phone-001"
+      }
+    },
+    "sensor.vm_phone_001_connection_status": {
+      "entity_id": "sensor.vm_phone_001_connection_status",
+      "state": "Connected",
+      "attributes": {
+        "friendly_name": "vm-phone-001 Connection status"
+      }
+    },
+    "sensor.vm_phone_001_ip_address": {
+      "entity_id": "sensor.vm_phone_001_ip_address",
+      "state": "192.168.60.21",
+      "attributes": {
+        "friendly_name": "vm-phone-001 IP address"
+      }
+    },
+    "sensor.vm_phone_001_connected_to": {
+      "entity_id": "sensor.vm_phone_001_connected_to",
+      "state": "Virtual EAP670 Hall",
+      "attributes": {
+        "friendly_name": "vm-phone-001 Connected to"
+      }
+    },
+    "sensor.vm_phone_001_ssid": {
+      "entity_id": "sensor.vm_phone_001_ssid",
+      "state": "MainNet 5G",
+      "attributes": {
+        "friendly_name": "vm-phone-001 SSID"
+      }
+    },
+    "sensor.vm_phone_001_downloaded": {
+      "entity_id": "sensor.vm_phone_001_downloaded",
+      "state": "4483.219216",
+      "attributes": {
+        "unit_of_measurement": "MB",
+        "device_class": "data_size",
+        "state_class": "total_increasing",
+        "friendly_name": "vm-phone-001 Downloaded"
+      }
+    },
+    "sensor.vm_phone_001_uploaded": {
+      "entity_id": "sensor.vm_phone_001_uploaded",
+      "state": "893.208677",
+      "attributes": {
+        "unit_of_measurement": "MB",
+        "device_class": "data_size",
+        "state_class": "total_increasing",
+        "friendly_name": "vm-phone-001 Uploaded"
+      }
+    },
+    "sensor.vm_phone_001_rx_activity": {
+      "entity_id": "sensor.vm_phone_001_rx_activity",
+      "state": "0.956573",
+      "attributes": {
+        "unit_of_measurement": "MB/s",
+        "device_class": "data_rate",
+        "state_class": "measurement",
+        "friendly_name": "vm-phone-001 RX activity"
+      }
+    },
+    "sensor.vm_phone_001_tx_activity": {
+      "entity_id": "sensor.vm_phone_001_tx_activity",
+      "state": "0.12",
+      "attributes": {
+        "unit_of_measurement": "MB/s",
+        "device_class": "data_rate",
+        "state_class": "measurement",
+        "friendly_name": "vm-phone-001 TX activity"
+      }
+    },
+    "sensor.vm_phone_001_rssi": {
+      "entity_id": "sensor.vm_phone_001_rssi",
+      "state": "-46",
+      "attributes": {
+        "unit_of_measurement": "dBm",
+        "device_class": "signal_strength",
+        "state_class": "measurement",
+        "friendly_name": "vm-phone-001 RSSI"
+      }
+    },
+    "sensor.vm_phone_001_signal_strength": {
+      "entity_id": "sensor.vm_phone_001_signal_strength",
+      "state": "80",
+      "attributes": {
+        "unit_of_measurement": "%",
+        "state_class": "measurement",
+        "friendly_name": "vm-phone-001 Signal strength"
+      }
+    },
+    "sensor.vm_phone_001_snr": {
+      "entity_id": "sensor.vm_phone_001_snr",
+      "state": "18",
+      "attributes": {
+        "unit_of_measurement": "dB",
+        "device_class": "signal_strength",
+        "state_class": "measurement",
+        "friendly_name": "vm-phone-001 SNR"
+      }
+    },
+    "sensor.vm_phone_001_uptime": {
+      "entity_id": "sensor.vm_phone_001_uptime",
+      "state": "2026-09-11T20:53:00+00:00",
+      "attributes": {
+        "device_class": "timestamp",
+        "friendly_name": "vm-phone-001 Uptime"
+      }
+    },
+    "binary_sensor.vm_phone_001_power_save": {
+      "entity_id": "binary_sensor.vm_phone_001_power_save",
+      "state": "off",
+      "attributes": {
+        "friendly_name": "vm-phone-001 Power save"
+      }
+    },
+    "button.vm_phone_001_reconnect": {
+      "entity_id": "button.vm_phone_001_reconnect",
+      "state": "unknown",
+      "attributes": {
+        "friendly_name": "vm-phone-001 Reconnect"
+      }
+    },
+    "switch.vm_phone_001_network_access": {
+      "entity_id": "switch.vm_phone_001_network_access",
+      "state": "on",
+      "attributes": {
+        "device_class": "switch",
+        "friendly_name": "vm-phone-001 Network access"
+      }
+    },
+    "device_tracker.vm_desk_001": {
+      "entity_id": "device_tracker.vm_desk_001",
+      "state": "home",
+      "attributes": {
+        "source_type": "router",
+        "ip": "192.168.30.100",
+        "mac": "02:56:4d:03:10:6d",
+        "host_name": "vm-desk-001",
+        "connected_switch": "Virtual SG3428XMPP Core Switch",
+        "connection_type": "wired",
+        "friendly_name": "vm-desk-001 vm-desk-001"
+      }
+    },
+    "sensor.vm_desk_001_connection_status": {
+      "entity_id": "sensor.vm_desk_001_connection_status",
+      "state": "Connected",
+      "attributes": {
+        "friendly_name": "vm-desk-001 Connection status"
+      }
+    },
+    "sensor.vm_desk_001_connected_to": {
+      "entity_id": "sensor.vm_desk_001_connected_to",
+      "state": "Virtual SG3428XMPP Core Switch",
+      "attributes": {
+        "friendly_name": "vm-desk-001 Connected to"
+      }
+    },
+    "sensor.vm_desk_001_downloaded": {
+      "entity_id": "sensor.vm_desk_001_downloaded",
+      "state": "15461.083445",
+      "attributes": {
+        "unit_of_measurement": "MB",
+        "device_class": "data_size",
+        "friendly_name": "vm-desk-001 Downloaded"
+      }
+    },
+    "sensor.vm_desk_001_uploaded": {
+      "entity_id": "sensor.vm_desk_001_uploaded",
+      "state": "537.143843",
+      "attributes": {
+        "unit_of_measurement": "MB",
+        "device_class": "data_size",
+        "friendly_name": "vm-desk-001 Uploaded"
+      }
+    },
+    "sensor.vm_desk_001_rx_activity": {
+      "entity_id": "sensor.vm_desk_001_rx_activity",
+      "state": "3.781505",
+      "attributes": {
+        "unit_of_measurement": "MB/s",
+        "friendly_name": "vm-desk-001 RX activity"
+      }
+    },
+    "sensor.vm_desk_001_tx_activity": {
+      "entity_id": "sensor.vm_desk_001_tx_activity",
+      "state": "0.4",
+      "attributes": {
+        "unit_of_measurement": "MB/s",
+        "friendly_name": "vm-desk-001 TX activity"
+      }
+    },
+    "sensor.vm_desk_001_uptime": {
+      "entity_id": "sensor.vm_desk_001_uptime",
+      "state": "2026-09-07T13:10:24+00:00",
+      "attributes": {
+        "device_class": "timestamp",
+        "friendly_name": "vm-desk-001 Uptime"
+      }
+    },
+    "switch.vm_desk_001_network_access": {
+      "entity_id": "switch.vm_desk_001_network_access",
+      "state": "on",
+      "attributes": {
+        "device_class": "switch",
+        "friendly_name": "vm-desk-001 Network access"
+      }
+    },
+    "device_tracker.vm_cam_007": {
+      "entity_id": "device_tracker.vm_cam_007",
+      "state": "not_home",
+      "attributes": {
+        "source_type": "router",
+        "mac": "02:56:4d:03:10:7f",
+        "host_name": "vm-cam-007",
+        "connection_type": "wired",
+        "friendly_name": "vm-cam-007 vm-cam-007"
+      }
+    },
+    "sensor.vm_cam_007_connection_status": {
+      "entity_id": "sensor.vm_cam_007_connection_status",
+      "state": "Disconnected",
+      "attributes": {
+        "friendly_name": "vm-cam-007 Connection status"
+      }
+    },
+    "switch.vm_cam_007_network_access": {
+      "entity_id": "switch.vm_cam_007_network_access",
+      "state": "off",
+      "attributes": {
+        "device_class": "switch",
+        "friendly_name": "vm-cam-007 Network access"
+      }
+    },
+    "device_tracker.virtual_eap670_hall": {
+      "entity_id": "device_tracker.virtual_eap670_hall",
+      "state": "home",
+      "attributes": {
+        "source_type": "router",
+        "ip": "192.168.1.13",
+        "mac": "02:56:4d:03:00:03",
+        "host_name": "Virtual EAP670 Hall",
+        "device_type": "ap",
+        "model": "EAP670",
+        "firmware_version": "5.1.6 (virtual)",
+        "ip_address": "192.168.1.13",
+        "detail_status": "Connected",
+        "friendly_name": "Virtual EAP670 Hall Virtual EAP670 Hall"
+      }
+    },
+    "sensor.virtual_eap670_hall_connected_clients": {
+      "entity_id": "sensor.virtual_eap670_hall_connected_clients",
+      "state": "37",
+      "attributes": {
+        "clients": [
+          {
+            "name": "vm-phone-001",
+            "mac": "02-56-4D-03-10-01",
+            "ip": "192.168.60.21"
+          }
+        ],
+        "friendly_name": "Virtual EAP670 Hall Connected clients"
+      }
+    },
+    "sensor.virtual_eap670_hall_cpu_utilization": {
+      "entity_id": "sensor.virtual_eap670_hall_cpu_utilization",
+      "state": "12",
+      "attributes": {
+        "unit_of_measurement": "%",
+        "friendly_name": "Virtual EAP670 Hall CPU utilization"
+      }
+    },
+    "sensor.virtual_eap670_hall_uptime": {
+      "entity_id": "sensor.virtual_eap670_hall_uptime",
+      "state": "2026-09-01T06:00:00+00:00",
+      "attributes": {
+        "device_class": "timestamp",
+        "friendly_name": "Virtual EAP670 Hall Uptime"
+      }
+    },
+    "binary_sensor.virtual_eap670_hall_status": {
+      "entity_id": "binary_sensor.virtual_eap670_hall_status",
+      "state": "on",
+      "attributes": {
+        "device_class": "connectivity",
+        "friendly_name": "Virtual EAP670 Hall Status"
+      }
+    },
+    "button.virtual_eap670_hall_reboot": {
+      "entity_id": "button.virtual_eap670_hall_reboot",
+      "state": "unknown",
+      "attributes": {
+        "friendly_name": "Virtual EAP670 Hall Reboot"
+      }
+    },
+    "button.virtual_eap670_hall_locate": {
+      "entity_id": "button.virtual_eap670_hall_locate",
+      "state": "unknown",
+      "attributes": {
+        "friendly_name": "Virtual EAP670 Hall Locate"
+      }
+    },
+    "switch.virtual_eap670_hall_led": {
+      "entity_id": "switch.virtual_eap670_hall_led",
+      "state": "on",
+      "attributes": {
+        "friendly_name": "Virtual EAP670 Hall Virtual EAP670 Hall LED"
+      }
+    },
+    "switch.virtual_eap670_hall_2_4_ghz_radio": {
+      "entity_id": "switch.virtual_eap670_hall_2_4_ghz_radio",
+      "state": "on",
+      "attributes": {
+        "friendly_name": "Virtual EAP670 Hall 2.4 GHz radio"
+      }
+    },
+    "switch.virtual_eap670_hall_5_ghz_radio": {
+      "entity_id": "switch.virtual_eap670_hall_5_ghz_radio",
+      "state": "on",
+      "attributes": {
+        "friendly_name": "Virtual EAP670 Hall 5 GHz radio"
+      }
+    },
+    "switch.virtual_eap670_hall_mainnet_5g_ssid": {
+      "entity_id": "switch.virtual_eap670_hall_mainnet_5g_ssid",
+      "state": "on",
+      "attributes": {
+        "friendly_name": "Virtual EAP670 Hall MainNet 5G SSID"
+      }
+    },
+    "update.virtual_eap670_hall_firmware": {
+      "entity_id": "update.virtual_eap670_hall_firmware",
+      "state": "on",
+      "attributes": {
+        "installed_version": "5.1.6 (virtual)",
+        "latest_version": "5.2.0 (virtual)",
+        "friendly_name": "Virtual EAP670 Hall Firmware"
+      }
+    },
+    "device_tracker.virtual_er7212pc_gateway": {
+      "entity_id": "device_tracker.virtual_er7212pc_gateway",
+      "state": "home",
+      "attributes": {
+        "source_type": "router",
+        "ip": "192.168.1.1",
+        "mac": "02:56:4d:03:00:01",
+        "host_name": "Virtual ER7212PC Gateway",
+        "device_type": "gateway",
+        "model": "ER7212PC",
+        "firmware_version": "1.20.3 (virtual)",
+        "ip_address": "192.168.1.1",
+        "detail_status": "Connected",
+        "friendly_name": "Virtual ER7212PC Gateway Virtual ER7212PC Gateway"
+      }
+    },
+    "sensor.virtual_er7212pc_gateway_wan1_download_rate": {
+      "entity_id": "sensor.virtual_er7212pc_gateway_wan1_download_rate",
+      "state": "1250.5",
+      "attributes": {
+        "unit_of_measurement": "kB/s",
+        "friendly_name": "Virtual ER7212PC Gateway WAN1 download rate"
+      }
+    },
+    "binary_sensor.virtual_er7212pc_gateway_wan1_internet": {
+      "entity_id": "binary_sensor.virtual_er7212pc_gateway_wan1_internet",
+      "state": "on",
+      "attributes": {
+        "device_class": "connectivity",
+        "friendly_name": "Virtual ER7212PC Gateway WAN1 internet"
+      }
+    },
+    "button.virtual_er7212pc_gateway_reboot": {
+      "entity_id": "button.virtual_er7212pc_gateway_reboot",
+      "state": "unknown",
+      "attributes": {
+        "friendly_name": "Virtual ER7212PC Gateway Reboot"
+      }
+    },
+    "sensor.main_campus_site_total_clients": {
+      "entity_id": "sensor.main_campus_site_total_clients",
+      "state": "128",
+      "attributes": {
+        "clients": [
+          {
+            "name": "vm-phone-001",
+            "mac": "02-56-4D-03-10-01",
+            "ip": "192.168.60.21"
+          },
+          {
+            "name": "vm-desk-001",
+            "mac": "02-56-4D-03-10-6D",
+            "ip": "192.168.30.100"
+          }
+        ],
+        "friendly_name": "Main Campus - Site Total clients"
+      }
+    },
+    "switch.main_campus_site_led": {
+      "entity_id": "switch.main_campus_site_led",
+      "state": "on",
+      "attributes": {
+        "friendly_name": "Main Campus - Site Main Campus LED"
+      }
+    },
+    "switch.main_campus_site_mainnet_5g_broadcast": {
+      "entity_id": "switch.main_campus_site_mainnet_5g_broadcast",
+      "state": "on",
+      "attributes": {
+        "friendly_name": "Main Campus - Site MainNet 5G broadcast"
+      }
+    },
+    "button.main_campus_site_wlan_optimization": {
+      "entity_id": "button.main_campus_site_wlan_optimization",
+      "state": "unknown",
+      "attributes": {
+        "friendly_name": "Main Campus - Site Main Campus WLAN optimization"
+      }
+    },
+    "binary_sensor.main_campus_site_wlan_optimization_running": {
+      "entity_id": "binary_sensor.main_campus_site_wlan_optimization_running",
+      "state": "off",
+      "attributes": {
+        "friendly_name": "Main Campus - Site WLAN optimization running"
+      }
+    },
+    "sensor.vm_desk_001_rssi": {
+      "entity_id": "sensor.vm_desk_001_rssi",
+      "state": "unavailable",
+      "attributes": {
+        "unit_of_measurement": "dBm",
+        "device_class": "signal_strength",
+        "friendly_name": "vm-desk-001 RSSI"
+      }
+    },
+    "sensor.vm_desk_001_snr": {
+      "entity_id": "sensor.vm_desk_001_snr",
+      "state": "unavailable",
+      "attributes": {
+        "unit_of_measurement": "dB",
+        "device_class": "signal_strength",
+        "friendly_name": "vm-desk-001 SNR"
+      }
+    },
+    "sensor.vm_desk_001_ssid": {
+      "entity_id": "sensor.vm_desk_001_ssid",
+      "state": "unavailable",
+      "attributes": {
+        "friendly_name": "vm-desk-001 SSID"
+      }
+    },
+    "button.main_campus_wlan_optimization": {
+      "entity_id": "button.main_campus_wlan_optimization",
+      "state": "unknown",
+      "attributes": {
+        "friendly_name": "Main Campus WLAN optimization"
+      }
+    },
+    "switch.main_campus_led": {
+      "entity_id": "switch.main_campus_led",
+      "state": "on",
+      "attributes": {
+        "friendly_name": "Main Campus LED"
+      }
+    },
+    "sensor.virtual_eap670_hall_memory_utilization": {
+      "entity_id": "sensor.virtual_eap670_hall_memory_utilization",
+      "state": "41",
+      "attributes": {
+        "unit_of_measurement": "%",
+        "friendly_name": "Virtual EAP670 Hall Memory utilization"
+      }
+    },
+    "sensor.virtual_eap670_hall_uplink_device": {
+      "entity_id": "sensor.virtual_eap670_hall_uplink_device",
+      "state": "Virtual SG3428XMPP Core Switch",
+      "attributes": {
+        "friendly_name": "Virtual EAP670 Hall Uplink device"
+      }
+    },
+    "sensor.virtual_eap670_hall_uplink_port": {
+      "entity_id": "sensor.virtual_eap670_hall_uplink_port",
+      "state": "5",
+      "attributes": {
+        "friendly_name": "Virtual EAP670 Hall Uplink port"
+      }
+    },
+    "sensor.virtual_eap670_hall_clients_5_ghz": {
+      "entity_id": "sensor.virtual_eap670_hall_clients_5_ghz",
+      "state": "21",
+      "attributes": {
+        "friendly_name": "Virtual EAP670 Hall Clients 5 GHz"
+      }
+    },
+    "sensor.virtual_eap670_hall_tx_utilization_5_ghz": {
+      "entity_id": "sensor.virtual_eap670_hall_tx_utilization_5_ghz",
+      "state": "37",
+      "attributes": {
+        "unit_of_measurement": "%",
+        "friendly_name": "Virtual EAP670 Hall TX utilization 5 GHz"
+      }
+    },
+    "sensor.vm_cam_007_connected_to": {
+      "entity_id": "sensor.vm_cam_007_connected_to",
+      "state": "Virtual ER7212PC Gateway",
+      "attributes": {
+        "friendly_name": "vm-cam-007 Connected to"
+      }
+    }
+  },
+  "entityRegistry": [
+    {
+      "entity_id": "device_tracker.vm_phone_001",
+      "platform": "omada_open_api",
+      "config_entry_id": "entry-omada-open-api",
+      "device_id": "dev-oapi-phone"
+    },
+    {
+      "entity_id": "sensor.vm_phone_001_connection_status",
+      "platform": "omada_open_api",
+      "config_entry_id": "entry-omada-open-api",
+      "device_id": "dev-oapi-phone"
+    },
+    {
+      "entity_id": "sensor.vm_phone_001_ip_address",
+      "platform": "omada_open_api",
+      "config_entry_id": "entry-omada-open-api",
+      "device_id": "dev-oapi-phone"
+    },
+    {
+      "entity_id": "sensor.vm_phone_001_ssid",
+      "platform": "omada_open_api",
+      "config_entry_id": "entry-omada-open-api",
+      "device_id": "dev-oapi-phone"
+    },
+    {
+      "entity_id": "sensor.vm_phone_001_downloaded",
+      "platform": "omada_open_api",
+      "config_entry_id": "entry-omada-open-api",
+      "device_id": "dev-oapi-phone"
+    },
+    {
+      "entity_id": "sensor.vm_phone_001_uploaded",
+      "platform": "omada_open_api",
+      "config_entry_id": "entry-omada-open-api",
+      "device_id": "dev-oapi-phone"
+    },
+    {
+      "entity_id": "sensor.vm_phone_001_rx_activity",
+      "platform": "omada_open_api",
+      "config_entry_id": "entry-omada-open-api",
+      "device_id": "dev-oapi-phone"
+    },
+    {
+      "entity_id": "sensor.vm_phone_001_tx_activity",
+      "platform": "omada_open_api",
+      "config_entry_id": "entry-omada-open-api",
+      "device_id": "dev-oapi-phone"
+    },
+    {
+      "entity_id": "sensor.vm_phone_001_rssi",
+      "platform": "omada_open_api",
+      "config_entry_id": "entry-omada-open-api",
+      "device_id": "dev-oapi-phone"
+    },
+    {
+      "entity_id": "sensor.vm_phone_001_signal_strength",
+      "platform": "omada_open_api",
+      "config_entry_id": "entry-omada-open-api",
+      "device_id": "dev-oapi-phone"
+    },
+    {
+      "entity_id": "sensor.vm_phone_001_snr",
+      "platform": "omada_open_api",
+      "config_entry_id": "entry-omada-open-api",
+      "device_id": "dev-oapi-phone"
+    },
+    {
+      "entity_id": "sensor.vm_phone_001_uptime",
+      "platform": "omada_open_api",
+      "config_entry_id": "entry-omada-open-api",
+      "device_id": "dev-oapi-phone"
+    },
+    {
+      "entity_id": "sensor.vm_phone_001_connected_to",
+      "platform": "omada_open_api",
+      "config_entry_id": "entry-omada-open-api",
+      "device_id": "dev-oapi-phone"
+    },
+    {
+      "entity_id": "binary_sensor.vm_phone_001_power_save",
+      "platform": "omada_open_api",
+      "config_entry_id": "entry-omada-open-api",
+      "device_id": "dev-oapi-phone"
+    },
+    {
+      "entity_id": "button.vm_phone_001_reconnect",
+      "platform": "omada_open_api",
+      "config_entry_id": "entry-omada-open-api",
+      "device_id": "dev-oapi-phone"
+    },
+    {
+      "entity_id": "switch.vm_phone_001_network_access",
+      "platform": "omada_open_api",
+      "config_entry_id": "entry-omada-open-api",
+      "device_id": "dev-oapi-phone"
+    },
+    {
+      "entity_id": "device_tracker.vm_desk_001",
+      "platform": "omada_open_api",
+      "config_entry_id": "entry-omada-open-api",
+      "device_id": "dev-oapi-desk"
+    },
+    {
+      "entity_id": "sensor.vm_desk_001_connection_status",
+      "platform": "omada_open_api",
+      "config_entry_id": "entry-omada-open-api",
+      "device_id": "dev-oapi-desk"
+    },
+    {
+      "entity_id": "sensor.vm_desk_001_connected_to",
+      "platform": "omada_open_api",
+      "config_entry_id": "entry-omada-open-api",
+      "device_id": "dev-oapi-desk"
+    },
+    {
+      "entity_id": "sensor.vm_desk_001_downloaded",
+      "platform": "omada_open_api",
+      "config_entry_id": "entry-omada-open-api",
+      "device_id": "dev-oapi-desk"
+    },
+    {
+      "entity_id": "sensor.vm_desk_001_uploaded",
+      "platform": "omada_open_api",
+      "config_entry_id": "entry-omada-open-api",
+      "device_id": "dev-oapi-desk"
+    },
+    {
+      "entity_id": "sensor.vm_desk_001_rx_activity",
+      "platform": "omada_open_api",
+      "config_entry_id": "entry-omada-open-api",
+      "device_id": "dev-oapi-desk"
+    },
+    {
+      "entity_id": "sensor.vm_desk_001_tx_activity",
+      "platform": "omada_open_api",
+      "config_entry_id": "entry-omada-open-api",
+      "device_id": "dev-oapi-desk"
+    },
+    {
+      "entity_id": "sensor.vm_desk_001_uptime",
+      "platform": "omada_open_api",
+      "config_entry_id": "entry-omada-open-api",
+      "device_id": "dev-oapi-desk"
+    },
+    {
+      "entity_id": "switch.vm_desk_001_network_access",
+      "platform": "omada_open_api",
+      "config_entry_id": "entry-omada-open-api",
+      "device_id": "dev-oapi-desk"
+    },
+    {
+      "entity_id": "device_tracker.vm_cam_007",
+      "platform": "omada_open_api",
+      "config_entry_id": "entry-omada-open-api",
+      "device_id": "dev-oapi-cam"
+    },
+    {
+      "entity_id": "sensor.vm_cam_007_connection_status",
+      "platform": "omada_open_api",
+      "config_entry_id": "entry-omada-open-api",
+      "device_id": "dev-oapi-cam"
+    },
+    {
+      "entity_id": "switch.vm_cam_007_network_access",
+      "platform": "omada_open_api",
+      "config_entry_id": "entry-omada-open-api",
+      "device_id": "dev-oapi-cam"
+    },
+    {
+      "entity_id": "device_tracker.virtual_eap670_hall",
+      "platform": "omada_open_api",
+      "config_entry_id": "entry-omada-open-api",
+      "device_id": "dev-oapi-ap"
+    },
+    {
+      "entity_id": "sensor.virtual_eap670_hall_connected_clients",
+      "platform": "omada_open_api",
+      "config_entry_id": "entry-omada-open-api",
+      "device_id": "dev-oapi-ap"
+    },
+    {
+      "entity_id": "sensor.virtual_eap670_hall_cpu_utilization",
+      "platform": "omada_open_api",
+      "config_entry_id": "entry-omada-open-api",
+      "device_id": "dev-oapi-ap"
+    },
+    {
+      "entity_id": "sensor.virtual_eap670_hall_uptime",
+      "platform": "omada_open_api",
+      "config_entry_id": "entry-omada-open-api",
+      "device_id": "dev-oapi-ap"
+    },
+    {
+      "entity_id": "binary_sensor.virtual_eap670_hall_status",
+      "platform": "omada_open_api",
+      "config_entry_id": "entry-omada-open-api",
+      "device_id": "dev-oapi-ap"
+    },
+    {
+      "entity_id": "button.virtual_eap670_hall_reboot",
+      "platform": "omada_open_api",
+      "config_entry_id": "entry-omada-open-api",
+      "device_id": "dev-oapi-ap"
+    },
+    {
+      "entity_id": "button.virtual_eap670_hall_locate",
+      "platform": "omada_open_api",
+      "config_entry_id": "entry-omada-open-api",
+      "device_id": "dev-oapi-ap"
+    },
+    {
+      "entity_id": "switch.virtual_eap670_hall_led",
+      "platform": "omada_open_api",
+      "config_entry_id": "entry-omada-open-api",
+      "device_id": "dev-oapi-ap"
+    },
+    {
+      "entity_id": "switch.virtual_eap670_hall_2_4_ghz_radio",
+      "platform": "omada_open_api",
+      "config_entry_id": "entry-omada-open-api",
+      "device_id": "dev-oapi-ap"
+    },
+    {
+      "entity_id": "switch.virtual_eap670_hall_5_ghz_radio",
+      "platform": "omada_open_api",
+      "config_entry_id": "entry-omada-open-api",
+      "device_id": "dev-oapi-ap"
+    },
+    {
+      "entity_id": "switch.virtual_eap670_hall_mainnet_5g_ssid",
+      "platform": "omada_open_api",
+      "config_entry_id": "entry-omada-open-api",
+      "device_id": "dev-oapi-ap"
+    },
+    {
+      "entity_id": "update.virtual_eap670_hall_firmware",
+      "platform": "omada_open_api",
+      "config_entry_id": "entry-omada-open-api",
+      "device_id": "dev-oapi-ap"
+    },
+    {
+      "entity_id": "device_tracker.virtual_er7212pc_gateway",
+      "platform": "omada_open_api",
+      "config_entry_id": "entry-omada-open-api",
+      "device_id": "dev-oapi-gw"
+    },
+    {
+      "entity_id": "sensor.virtual_er7212pc_gateway_wan1_download_rate",
+      "platform": "omada_open_api",
+      "config_entry_id": "entry-omada-open-api",
+      "device_id": "dev-oapi-gw"
+    },
+    {
+      "entity_id": "binary_sensor.virtual_er7212pc_gateway_wan1_internet",
+      "platform": "omada_open_api",
+      "config_entry_id": "entry-omada-open-api",
+      "device_id": "dev-oapi-gw"
+    },
+    {
+      "entity_id": "button.virtual_er7212pc_gateway_reboot",
+      "platform": "omada_open_api",
+      "config_entry_id": "entry-omada-open-api",
+      "device_id": "dev-oapi-gw"
+    },
+    {
+      "entity_id": "sensor.main_campus_site_total_clients",
+      "platform": "omada_open_api",
+      "config_entry_id": "entry-omada-open-api",
+      "device_id": "dev-oapi-site"
+    },
+    {
+      "entity_id": "switch.main_campus_site_led",
+      "platform": "omada_open_api",
+      "config_entry_id": "entry-omada-open-api",
+      "device_id": "dev-oapi-site"
+    },
+    {
+      "entity_id": "switch.main_campus_site_mainnet_5g_broadcast",
+      "platform": "omada_open_api",
+      "config_entry_id": "entry-omada-open-api",
+      "device_id": "dev-oapi-site"
+    },
+    {
+      "entity_id": "button.main_campus_site_wlan_optimization",
+      "platform": "omada_open_api",
+      "config_entry_id": "entry-omada-open-api",
+      "device_id": "dev-oapi-site"
+    },
+    {
+      "entity_id": "binary_sensor.main_campus_site_wlan_optimization_running",
+      "platform": "omada_open_api",
+      "config_entry_id": "entry-omada-open-api",
+      "device_id": "dev-oapi-site"
+    },
+    {
+      "entity_id": "sensor.vm_desk_001_rssi",
+      "platform": "omada_open_api",
+      "config_entry_id": "entry-omada-open-api",
+      "device_id": "dev-oapi-desk"
+    },
+    {
+      "entity_id": "sensor.vm_desk_001_snr",
+      "platform": "omada_open_api",
+      "config_entry_id": "entry-omada-open-api",
+      "device_id": "dev-oapi-desk"
+    },
+    {
+      "entity_id": "sensor.vm_desk_001_ssid",
+      "platform": "omada_open_api",
+      "config_entry_id": "entry-omada-open-api",
+      "device_id": "dev-oapi-desk"
+    },
+    {
+      "entity_id": "button.main_campus_wlan_optimization",
+      "platform": "omada_open_api",
+      "config_entry_id": "entry-omada-open-api"
+    },
+    {
+      "entity_id": "switch.main_campus_led",
+      "platform": "omada_open_api",
+      "config_entry_id": "entry-omada-open-api"
+    },
+    {
+      "entity_id": "sensor.virtual_eap670_hall_memory_utilization",
+      "platform": "omada_open_api",
+      "config_entry_id": "entry-omada-open-api",
+      "device_id": "dev-oapi-ap"
+    },
+    {
+      "entity_id": "sensor.virtual_eap670_hall_uplink_device",
+      "platform": "omada_open_api",
+      "config_entry_id": "entry-omada-open-api",
+      "device_id": "dev-oapi-ap"
+    },
+    {
+      "entity_id": "sensor.virtual_eap670_hall_uplink_port",
+      "platform": "omada_open_api",
+      "config_entry_id": "entry-omada-open-api",
+      "device_id": "dev-oapi-ap"
+    },
+    {
+      "entity_id": "sensor.virtual_eap670_hall_clients_5_ghz",
+      "platform": "omada_open_api",
+      "config_entry_id": "entry-omada-open-api",
+      "device_id": "dev-oapi-ap"
+    },
+    {
+      "entity_id": "sensor.virtual_eap670_hall_tx_utilization_5_ghz",
+      "platform": "omada_open_api",
+      "config_entry_id": "entry-omada-open-api",
+      "device_id": "dev-oapi-ap"
+    },
+    {
+      "entity_id": "sensor.vm_cam_007_connected_to",
+      "platform": "omada_open_api",
+      "config_entry_id": "entry-omada-open-api",
+      "device_id": "dev-oapi-cam"
+    }
+  ],
+  "deviceRegistry": [
+    {
+      "id": "dev-oapi-phone",
+      "name": "vm-phone-001",
+      "manufacturer": "Apple",
+      "model": "iPhone",
+      "sw_version": "iOS 18",
+      "identifiers": [
+        [
+          "omada_open_api",
+          "02-56-4D-03-10-01"
+        ]
+      ],
+      "connections": [
+        [
+          "mac",
+          "02:56:4d:03:10:01"
+        ]
+      ]
+    },
+    {
+      "id": "dev-oapi-desk",
+      "name": "vm-desk-001",
+      "manufacturer": "Dell",
+      "model": "Unknown",
+      "identifiers": [
+        [
+          "omada_open_api",
+          "02-56-4D-03-10-6D"
+        ]
+      ],
+      "connections": [
+        [
+          "mac",
+          "02:56:4d:03:10:6d"
+        ]
+      ]
+    },
+    {
+      "id": "dev-oapi-cam",
+      "name": "vm-cam-007",
+      "manufacturer": "Hikvision",
+      "model": "Unknown",
+      "identifiers": [
+        [
+          "omada_open_api",
+          "02-56-4D-03-10-7F"
+        ]
+      ],
+      "connections": [
+        [
+          "mac",
+          "02:56:4d:03:10:7f"
+        ]
+      ]
+    },
+    {
+      "id": "dev-oapi-ap",
+      "name": "Virtual EAP670 Hall",
+      "manufacturer": "TP-Link",
+      "model": "EAP670",
+      "sw_version": "5.1.6 (virtual)",
+      "identifiers": [
+        [
+          "omada_open_api",
+          "02-56-4D-03-00-03"
+        ]
+      ],
+      "connections": [
+        [
+          "mac",
+          "02:56:4d:03:00:03"
+        ]
+      ]
+    },
+    {
+      "id": "dev-oapi-gw",
+      "name": "Virtual ER7212PC Gateway",
+      "manufacturer": "TP-Link",
+      "model": "ER7212PC",
+      "sw_version": "1.20.3 (virtual)",
+      "identifiers": [
+        [
+          "omada_open_api",
+          "02-56-4D-03-00-01"
+        ]
+      ],
+      "connections": [
+        [
+          "mac",
+          "02:56:4d:03:00:01"
+        ]
+      ]
+    },
+    {
+      "id": "dev-oapi-site",
+      "name": "Main Campus - Site",
+      "manufacturer": "TP-Link",
+      "model": "Omada Site",
+      "identifiers": [
+        [
+          "omada_open_api",
+          "site_site-main"
+        ]
+      ]
+    }
+  ]
+}

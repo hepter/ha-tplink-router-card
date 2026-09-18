@@ -1,3 +1,5 @@
+import { isOmadaIntegrationDomain } from "../adapters/integration-profile";
+
 export type ActionDomain = "switch" | "button";
 export type ActionKind = "host" | "guest" | "iot" | "router";
 export type ActionBand = "2g" | "5g" | "6g";
@@ -41,18 +43,24 @@ export type MatchedAction = {
   requiresHold: boolean;
 };
 
+// "5 GHz radio" / "5_ghz_radio" (omada_open_api) carry a separator between digit and unit.
 const parseBand = (text: string): ActionBand | undefined => {
-  if (/(2\.4|2g|2ghz|24g)/i.test(text)) return "2g";
-  if (/(5g|5ghz)/i.test(text)) return "5g";
-  if (/(6g|6ghz)/i.test(text)) return "6g";
+  if (/(2\.4|2g|2ghz|24g|2[ _]ghz)/i.test(text)) return "2g";
+  if (/(5g|5ghz|5[ _]ghz)/i.test(text)) return "5g";
+  if (/(6g|6ghz|6[ _]ghz)/i.test(text)) return "6g";
   return undefined;
 };
 
+// The UI editor saves an untouched multi-select as [], so an empty list keeps the defaults;
+// `none` is the explicit way to hide every group.
 export const resolveHeaderActionGroups = (
   configured: unknown,
 ): ReadonlySet<HeaderActionGroup> => {
-  if (!Array.isArray(configured)) return new Set(DEFAULT_HEADER_ACTION_GROUPS);
+  if (!Array.isArray(configured) || configured.length === 0) {
+    return new Set(DEFAULT_HEADER_ACTION_GROUPS);
+  }
   const values = configured.map((value) => String(value ?? "").trim().toLowerCase());
+  if (values.includes("none")) return new Set();
   if (values.includes("all")) return new Set(HEADER_ACTION_GROUPS);
   return new Set(
     values.filter((value): value is HeaderActionGroup =>
@@ -68,8 +76,7 @@ export const matchAction = (
   integrationDomain?: string,
 ): MatchedAction | null => {
   const text = `${entityId} ${friendlyName}`.toLowerCase();
-  const isOmadaIntegration =
-    integrationDomain === "omada" || integrationDomain === "tplink_omada";
+  const isOmadaIntegration = isOmadaIntegrationDomain(integrationDomain);
 
   if (domain === "button") {
     if (text.includes("reboot") || text.includes("restart")) {

@@ -1,5 +1,30 @@
 # Changelog
 
+## 0.6.0
+
+### Added
+
+- `omada_open_api` (HACS `ha-omada-open-api` 1.10.x) support (#15).
+  - Client rows from the integration's trackers (`connection_type`, `connected_ap`, `connected_switch`, `ssid`) joined with the per-client sensors (RSSI, SNR, downloaded/uploaded, RX/TX activity, uptime) and the `Power save` binary sensor.
+  - Access point, switch and gateway rows from the device trackers (`device_type`, `model`, `firmware_version`, `detail_status`).
+  - `actions` column: the client `Network access` switch as the block action (hold to confirm, shown as blocked/allowed like the other Omada integrations) and the `Reconnect` button.
+  - Header actions: AP radio switches, per-AP SSID switches (by SSID name), device reboot buttons and the site `WLAN optimization` button.
+  - Own column profile: `apName`, `snr`, `powerSave`, `downloaded`, `uploaded`, `actions` and the device metadata columns; packet counters and link rates are left out because the integration never publishes them.
+  - `signalStrength` column (default for this integration): the controller's signal quality percentage as a coloured bar, next to the RSSI `signal` column.
+  - Opt-in detail columns `vendor`, `clients`, `uplink` (omada_open_api) and `ssid`, `connectedTo`, `cpu`, `memory` (omada and omada_open_api); a pending firmware update (`update` entity) shows a badge in `deviceFirmware` for every Omada domain.
+- Virtual lab: the Omada controller mock also serves the Omada Open API (OAuth2 client credentials, sites, devices, clients, block/unblock/reconnect, reboot, LED, radio, SSID, PoE endpoints) on the same port and seed, so `omada_open_api` can be added to Home Assistant as a self-hosted controller. Six seed clients start blocked, and cumulative client counters (traffic, packets, uptime) now grow with wall-clock time instead of jumping around between polls.
+
+### Fixed
+
+- Omada rows: percentage sensors are no longer read as RSSI, and text sensors that share the `connected` keyword no longer erase a client's uptime.
+- Omada rows: unavailable RSSI / SNR / SSID sensors no longer turn a wired client into a WiFi client, and switches or buttons without a device (site LED, WLAN optimization) no longer produce rows.
+- Action labels and tooltips drop a device name that Home Assistant repeats for `has_entity_name` entities (`omada_open_api`).
+- `header_action_groups: []` (what the card editor stores when nothing is selected) keeps the default groups instead of hiding every header action; `none` hides them explicitly and is offered in the editor.
+- The `ip` column sorts IPv4 addresses by octet value (`192.168.1.9` before `192.168.1.100`), IPv6 addresses after IPv4 by their expanded groups, and empty cells or `0.0.0.0` last, for every integration.
+- Sorting by `band`, `down`, `up`, `tx`, `rx`, `signal`, `signalStrength` or `snr` no longer ranks offline (or wired, for the radio columns) rows by the stale value hidden behind their `—` cell; those rows sort as empty and stay at the end.
+- Header action band parsing accepts `2.4 GHz` / `5 GHz` / `6 GHz` with a space or underscore.
+- The entry domain fallback (used when the config entry list is unavailable) keeps `tplink_omada` instead of downgrading it to `omada`.
+
 ## 0.5.0
 
 ### Added

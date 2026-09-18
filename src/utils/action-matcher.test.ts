@@ -123,6 +123,86 @@ describe("header action group configuration", () => {
   it("accepts an explicit list, ignores unknown keys and supports all", () => {
     expect([...resolveHeaderActionGroups(["wifi", "dhcp", "bogus"])]).toEqual(["wifi", "dhcp"]);
     expect([...resolveHeaderActionGroups(["ALL"])].sort()).toEqual([...HEADER_ACTION_GROUPS].sort());
-    expect(resolveHeaderActionGroups([]).size).toBe(0);
+  });
+
+  it("keeps the defaults for an empty list and hides everything only for none", () => {
+    expect([...resolveHeaderActionGroups([])].sort()).toEqual(
+      [...DEFAULT_HEADER_ACTION_GROUPS].sort(),
+    );
+    expect(resolveHeaderActionGroups(["none"]).size).toBe(0);
+    expect(resolveHeaderActionGroups(["wifi", "none"]).size).toBe(0);
+  });
+});
+
+describe("omada_open_api header actions", () => {
+  it("matches reboot, reconnect and WLAN optimization buttons like the other Omada domains", () => {
+    expect(
+      matchAction(
+        "button",
+        "button.virtual_eap670_hall_reboot",
+        "Virtual EAP670 Hall Reboot",
+        "omada_open_api",
+      ),
+    ).toEqual({ kind: "router", group: "reboot", requiresHold: true });
+    expect(
+      matchAction("button", "button.vm_phone_001_reconnect", "vm-phone-001 Reconnect", "omada_open_api"),
+    ).toEqual({ kind: "router", group: "controller", requiresHold: true });
+    expect(
+      matchAction(
+        "button",
+        "button.main_campus_site_wlan_optimization",
+        "Main Campus - Site Main Campus WLAN optimization",
+        "omada_open_api",
+      ),
+    ).toEqual({ kind: "router", group: "controller", requiresHold: true });
+  });
+
+  it("parses the spaced band of omada_open_api radio switches", () => {
+    expect(
+      matchAction(
+        "switch",
+        "switch.virtual_eap670_hall_2_4_ghz_radio",
+        "Virtual EAP670 Hall 2.4 GHz radio",
+        "omada_open_api",
+      ),
+    ).toEqual({ kind: "host", group: "wifi", band: "2g", requiresHold: true });
+    expect(
+      matchAction(
+        "switch",
+        "switch.virtual_eap670_hall_5_ghz_radio",
+        "Virtual EAP670 Hall 5 GHz radio",
+        "omada_open_api",
+      ),
+    ).toEqual({ kind: "host", group: "wifi", band: "5g", requiresHold: true });
+    expect(
+      matchAction(
+        "switch",
+        "switch.virtual_eap772_lab_6_ghz_radio",
+        "Virtual EAP772 Lab 6 GHz radio",
+        "omada_open_api",
+      ),
+    ).toEqual({ kind: "host", group: "wifi", band: "6g", requiresHold: true });
+  });
+
+  it("routes per-AP SSID switches by their SSID name and hides the ones without a match", () => {
+    expect(
+      matchAction(
+        "switch",
+        "switch.virtual_eap670_hall_guestnet_5g_ssid",
+        "Virtual EAP670 Hall GuestNet 5G SSID",
+        "omada_open_api",
+      ),
+    ).toEqual({ kind: "guest", group: "guest", band: "5g", requiresHold: true });
+    expect(
+      matchAction("switch", "switch.virtual_eap670_hall_led", "Virtual EAP670 Hall LED", "omada_open_api"),
+    ).toBeNull();
+    expect(
+      matchAction(
+        "switch",
+        "switch.vm_phone_001_network_access",
+        "vm-phone-001 Network access",
+        "omada_open_api",
+      ),
+    ).toBeNull();
   });
 });
