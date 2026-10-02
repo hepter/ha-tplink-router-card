@@ -46,6 +46,7 @@ A Lovelace card for Home Assistant focused on TP-Link client monitoring and quic
 - **Regex Support:** Use `/pattern/` syntax in the search box for advanced filtering.
 - **Quick Filters:** Compact dropdowns for Band (2.4G/5G/6G), Connection (WiFi/Wired/IoT/Guest), and Status.
 - **Multi-Sort:** `Shift + click` on column headers to sort by multiple columns simultaneously.
+- **Smart Sorting:** IP addresses sort numerically (IPv4 by octet, IPv6 after IPv4); empty cells and `0.0.0.0` always sort last.
 
 **🌍 Global & Developer Features**
 - **i18n Support:** Automatic Home Assistant locale selection (English, Turkish, etc.), including connection, device type and status labels.
@@ -60,7 +61,7 @@ A Lovelace card for Home Assistant focused on TP-Link client monitoring and quic
 
 ![tplink_deco](docs/images/tplink_deco_card.png)
 
-`omada` / `tplink_omada`:
+`omada` / `omada_open_api` / `tplink_omada`:
 
 ![omada](docs/images/tplink_omada_card.png)
 
@@ -437,10 +438,12 @@ column_layout:
   - key: status
   - key: apName
   - key: band
-  - key: channel      # omada only
-  - key: wifiMode     # omada only
+  - key: ssid             # omada / omada_open_api
+  - key: channel          # omada only
+  - key: wifiMode         # omada only
   - key: signal
-  - key: lastSeen     # omada only
+  - key: signalStrength   # omada_open_api only
+  - key: lastSeen         # omada only
 ```
 
 Options:
@@ -452,7 +455,7 @@ Options:
 - `show_hidden_entities`: Show hidden switch/button entities in action areas. Default `false`.
 - `header_action_render`: Header action button style: `icon | name | icon_name`. Default `icon`. Works across all supported integrations when header actions exist.
 - `row_action_render`: Row action button style: `icon | name | icon_name`. Default `icon`. Currently effective for Omada row actions (`omada` / `omada_open_api` / `tplink_omada`).
-- `header_action_groups`: Which header action groups to show. Keys: `wifi`, `guest`, `iot`, `reboot`, `scanning`, `controller`, `vpn`, `dhcp`, `wan`; `all` shows everything, an empty list hides every header action. Default `[wifi, guest, reboot, scanning, controller]`. See "Header action groups" below.
+- `header_action_groups`: Which header action groups to show. Keys: `wifi`, `guest`, `iot`, `reboot`, `scanning`, `controller`, `vpn`, `dhcp`, `wan`; `all` shows every group, `none` hides every header action, an empty list (what the card editor stores when nothing is selected) keeps the default. Default `[wifi, guest, reboot, scanning, controller]`. See "Header action groups" below.
 - `shift_click_underline`: Show Shift+click underline hints for entity-clickable cells (currently Omada-only visual behavior).
 - `hide_header`: Hide the header area.
 - `hide_filter_section`: Hide the filter section.
@@ -497,7 +500,8 @@ The fallback colors are green (`#3aa45b`) and red (`#d32f2f`).
 Rules:
 - Column order follows `column_layout` order.
 - Only columns valid for the selected integration domain are rendered.
-- `apName`, `channel`, `wifiMode` and `lastSeen` are opt-in: they are never part of the default layout and appear only when listed in `column_layout` (or legacy `columns`).
+- `apName`, `channel`, `wifiMode`, `lastSeen`, `ssid`, `connectedTo`, `vendor`, `clients`, `cpu`, `memory` and `uplink` are opt-in: they are never part of the default layout and appear only when listed in `column_layout` (or legacy `columns`).
+- Sorting treats `—` cells as empty: offline rows (and wired rows for `signal`, `signalStrength`, `snr`) and `0.0.0.0` IP addresses stay at the end in both directions.
 - Sticky behavior is applied only to columns marked with `fixed: start|end`.
 - Sticky columns use edge shadow indicators during horizontal scroll.
 - Non-sticky columns are never width-limited by sticky column rules.
@@ -596,6 +600,8 @@ See `virtual_modems/README.md` for setup and run commands.
 - Missing metadata/tooltips: some routers/integrations do not expose full router details.
 - No action icons: action entities may be unsupported, unavailable, or intentionally filtered for safety.
 - A header button you expect is missing (IoT, VPN, DHCP, WAN): add its group to `header_action_groups`; these groups are hidden by default.
+- A client is missing on `omada_open_api`: the integration creates entities only for the clients selected in its config flow; add the client in the integration's options (client selection).
+- The card still shows the previous version after an update: Home Assistant and HACS cache the bundle for a short time; wait a minute, then hard-refresh the browser (clear the site data if a service worker keeps serving the old file).
 - Omada Controller 6.x (`omada`): the integration currently fetches at most 100 clients per poll (the card shows a notice when exactly 100 arrive) and its Reconnect button is broken on v6 until upstream PR #164 lands.
 
 ## Changelog

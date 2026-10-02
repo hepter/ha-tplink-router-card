@@ -92,6 +92,7 @@ The venv on Linux is created the same way (`python3 -m venv virtual_modems/.venv
   - override via env: `VMODEM_OMADA_USERNAME`, `VMODEM_OMADA_PASSWORD`
   - `VMODEM_OMADA_VERSION` sets `controllerVer` (default `5.15.8`). With `6.0.1` or newer `ha-omada` switches to the `/openapi/v2` client list and receives at most 100 of the 128 virtual clients per poll, which reproduces the Omada 6.x truncation; on 5.x the openapi paths deliberately return 404.
   - Seed: 6 devices (gateway, 2 switches, 3 access points with status codes 14/15/30/11) and 128 clients (108 wireless, 20 wired, 8 guest, 13 flapping between online and offline). Six clients (`vm-wifi-001`, `-024`, `-047`, `-070`, `-093`, `vm-wired-008`) start blocked, so the Open API `scope=3` list and the `Network access` switches have something to show from the first poll. SSIDs keep their original names (`MainNet 2.4G/5G/6G`, `GuestNet 5G`, `IoTNet 2.4G`) because HA entries filter tracked clients by SSID.
+  - Cumulative client counters (traffic, packets, uptime) grow with wall-clock time at a per-client pace, so Home Assistant `total_increasing` sensors never decrease between polls.
 - `omada_open_api` (served by the `omada_controller` and `lab` profiles)
   - controller type: `Self-Hosted (Local Controller)`
   - api url: `http://<ip>` (include protocol; leave `verify_ssl` off for plain HTTP)

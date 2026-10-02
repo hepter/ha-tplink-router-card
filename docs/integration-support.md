@@ -90,6 +90,7 @@ Last upstream sync: 2026-09-18 (`tplink_router` v2.38.0, `ha-tplink-deco` v3.10.
 - Header actions are grouped (`src/utils/action-matcher.ts` `HeaderActionGroup`); `header_action_groups` selects the rendered groups, default `wifi, guest, reboot, scanning, controller`. An empty list keeps the defaults, `none` hides every group, `all` shows every group.
 - Rows come from device groups; a group without a device and without a tracker (site-level switches and buttons) is never a row.
 - Missing fields are rendered as `—`.
+- Sorting: `ip` orders IPv4 by octet value and IPv6 after IPv4 (`src/utils/ip-sort.ts`); `—` cells (offline rows, wired rows for the radio columns, `0.0.0.0`) sort as empty and stay at the end in both directions.
 - Adapters emit stable English labels for connection, device type, device status and power save; the card translates the known ones (`src/i18n/index.ts` `localizeLabel`).
 - Integration metadata columns (`deviceType`, `deviceModel`, `deviceFirmware`, `deviceStatus`) are enabled for Omada domains and Deco domain.
 - `tplink_omada` uses its own profile without `apName` and without the HACS-only metric columns.

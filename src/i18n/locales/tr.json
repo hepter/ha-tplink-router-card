@@ -147,7 +147,7 @@
     "showHiddenEntities": "Gizli Entity'leri Göster",
     "showHiddenEntitiesHelp": "Açıkken gizli switch/button entity'leri aksiyon alanlarında da gösterilir.",
     "headerActionRender": "Üst Aksiyon Görünümü",
-    "headerActionGroupsHelp": "Başlıkta yalnızca seçilen gruplar gösterilir. Varsayılan: WiFi, Misafir WiFi, Yeniden başlat, Veri çekme, Controller. IoT, VPN, DHCP ve WAN kendi erişiminizi kesebilir; açmadan gösterilmez.",
+    "headerActionGroupsHelp": "Başlıkta yalnızca seçilen gruplar gösterilir. Varsayılan: WiFi, Misafir WiFi, Yeniden başlat, Veri çekme, Controller. IoT, VPN, DHCP ve WAN kendi erişiminizi kesebilir; açmadan gösterilmez. Liste boş bırakılırsa varsayılan kullanılır; tüm başlık aksiyonlarını gizlemek için \"Tüm grupları gizle\"yi seçin.",
     "headerActionGroups": "Başlık aksiyon grupları",
     "rowActionRender": "Satır Aksiyon Görünümü",
     "actionRenderIcon": "İkon",

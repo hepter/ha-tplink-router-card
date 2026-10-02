@@ -147,7 +147,7 @@
     "showHiddenEntities": "Show Hidden Entities",
     "showHiddenEntitiesHelp": "When enabled, hidden switch/button entities are also shown in action sections.",
     "headerActionRender": "Header Action Render",
-    "headerActionGroupsHelp": "Only the selected groups are shown in the header. Default: WiFi, Guest WiFi, Reboot, Data fetching, Controller. IoT, VPN, DHCP and WAN can cut your own access, so they are off unless you enable them.",
+    "headerActionGroupsHelp": "Only the selected groups are shown in the header. Default: WiFi, Guest WiFi, Reboot, Data fetching, Controller. IoT, VPN, DHCP and WAN can cut your own access, so they are off unless you enable them. Leave the list empty for the default, or choose \"Hide all groups\" to hide every header action.",
     "headerActionGroups": "Header action groups",
     "rowActionRender": "Row Action Render",
     "actionRenderIcon": "Icon",

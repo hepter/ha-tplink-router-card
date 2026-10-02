@@ -11,7 +11,7 @@
   - Header actions: AP radio switches, per-AP SSID switches (by SSID name), device reboot buttons and the site `WLAN optimization` button.
   - Own column profile: `apName`, `snr`, `powerSave`, `downloaded`, `uploaded`, `actions` and the device metadata columns; packet counters and link rates are left out because the integration never publishes them.
   - `signalStrength` column (default for this integration): the controller's signal quality percentage as a coloured bar, next to the RSSI `signal` column.
-  - Opt-in detail columns `vendor`, `clients`, `uplink` (omada_open_api) and `ssid`, `connectedTo`, `cpu`, `memory` (omada and omada_open_api); a pending firmware update (`update` entity) shows a badge in `deviceFirmware` for every Omada domain.
+  - Opt-in detail columns `vendor`, `clients`, `uplink` (omada_open_api) and `ssid`, `connectedTo`, `cpu`, `memory` (omada and omada_open_api); a pending firmware update (`update` entity) shows a badge in `deviceFirmware` for every Omada domain; Shift+click on the new columns opens the sensor behind them.
 - Virtual lab: the Omada controller mock also serves the Omada Open API (OAuth2 client credentials, sites, devices, clients, block/unblock/reconnect, reboot, LED, radio, SSID, PoE endpoints) on the same port and seed, so `omada_open_api` can be added to Home Assistant as a self-hosted controller. Six seed clients start blocked, and cumulative client counters (traffic, packets, uptime) now grow with wall-clock time instead of jumping around between polls.
 
 ### Fixed

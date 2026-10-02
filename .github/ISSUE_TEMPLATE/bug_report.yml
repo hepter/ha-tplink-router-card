@@ -37,7 +37,7 @@ body:
     id: integration-version
     attributes:
       label: Integration version
-      description: tp-link integration version (and omada version if relevant)
+      description: Integration and version (tplink_router, tplink_deco, omada / ha-omada, omada_open_api / ha-omada-open-api or core tplink_omada)
       placeholder: e.g. home-assistant-tplink-router 2.18.0
   - type: input
     id: router-model
