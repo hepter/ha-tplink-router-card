@@ -29,8 +29,10 @@ import { formatSpeed } from "../utils/format";
 import { buildOmadaRows, isLikelyOmadaTrackerByAttrs } from "../adapters/omada";
 import {
   applyMeshParentNames,
+  applyMeshSignalScale,
   detectLinkRateUnit,
   mapTrackerStateToRow,
+  meshSignalLevelColor,
   normalizeMac,
   preferredRouterDeviceIds,
   selectRouterTrackers,
@@ -1568,16 +1570,18 @@ export class TplinkRouterCard extends LitElement {
           .map((item) => [item.entity_id, item.device_id as string] as const),
       );
 
-      rows = applyMeshParentNames(
-        entities.map((state) =>
-          ({
-            ...mapTrackerStateToRow(
-              state,
-              this._config?.speed_unit ?? "MBps",
-              linkRateUnit,
-            ),
-            deviceId: trackerDeviceIdByEntity.get(state.entity_id),
-          }) as RowData,
+      rows = applyMeshSignalScale(
+        applyMeshParentNames(
+          entities.map((state) =>
+            ({
+              ...mapTrackerStateToRow(
+                state,
+                this._config?.speed_unit ?? "MBps",
+                linkRateUnit,
+              ),
+              deviceId: trackerDeviceIdByEntity.get(state.entity_id),
+            }) as RowData,
+          ),
         ),
       );
     }
@@ -1924,6 +1928,18 @@ export class TplinkRouterCard extends LitElement {
       target === "header" ? this._config?.header_action_render : this._config?.row_action_render;
     if (value === "icon" || value === "name" || value === "icon_name") return value;
     return "icon";
+  }
+
+  private _renderMeshSignalBars(level: number, max: number | null) {
+    const total = Math.max(1, Math.min(5, max ?? 5));
+    const filled = Math.max(0, Math.min(total, Math.round(level)));
+    const color = meshSignalLevelColor(filled, total);
+    return Array.from({ length: total }, (_, index) => {
+      const height = `height:${40 + (60 * (index + 1)) / total}%`;
+      return index < filled
+        ? html`<span class="signal-level-bar" style=${`${height};background:${color}`}></span>`
+        : html`<span class="signal-level-bar unfilled" style=${height}></span>`;
+    });
   }
 
   private _renderActionButtonContent(
@@ -3438,13 +3454,7 @@ export class TplinkRouterCard extends LitElement {
                             class="signal-level"
                             title=${t("card.meshSignalLevel", { level: row.meshSignalLevel })}
                           >
-                            ${Array.from(
-                              { length: Math.max(0, Math.min(5, Math.round(row.meshSignalLevel))) },
-                              (_, index) => html`<span
-                                class="signal-level-bar"
-                                style=${`height:${44 + index * 14}%`}
-                              ></span>`,
-                            )}
+                            ${this._renderMeshSignalBars(row.meshSignalLevel, row.meshSignalMax)}
                           </span>
                         `
                       : html`

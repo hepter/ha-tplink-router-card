@@ -103,6 +103,7 @@ export interface MappedTrackerRow {
   meshParentMac: string | null;
   // Backhaul level in bars (1-3 on BE, up to 5 on AX), not dBm.
   meshSignalLevel: number | null;
+  meshSignalMax: number | null;
   deviceType?: string;
   deviceModel?: string;
   deviceFirmware?: string;
@@ -127,6 +128,7 @@ export const EMPTY_EXTENDED_ROW_FIELDS = {
   meshRole: null,
   meshParentMac: null,
   meshSignalLevel: null,
+  meshSignalMax: null,
 } as const satisfies Partial<MappedTrackerRow>;
 
 export const toNumber = (value: unknown): number | null => {
@@ -218,6 +220,10 @@ export const signalPercentColor = (percent: number | null) => {
   if (percent < 80) return "var(--signal-good)";
   return "var(--signal-excellent)";
 };
+
+// Spreads the bar level over the percent palette: level 1 is bad, the full scale excellent.
+export const meshSignalLevelColor = (level: number, max: number) =>
+  signalPercentColor(max > 1 ? ((Math.min(level, max) - 1) / (max - 1)) * 100 : 100);
 
 export const detectLinkRateUnit = (states: HassEntity[]): LinkRateUnitHint => {
   let max = 0;
@@ -619,6 +625,19 @@ export const mapTrackerStateToRow = (
     deviceFirmware,
     deviceStatus,
   };
+};
+
+// The router sends the bar level without its maximum, so the scale is inferred per entry.
+export const applyMeshSignalScale = (rows: MappedTrackerRow[]): MappedTrackerRow[] => {
+  const levels = rows.flatMap((row) => (row.meshSignalLevel !== null ? [row.meshSignalLevel] : []));
+  if (levels.length === 0) return rows;
+  const mainModel = rows.find((row) => row.meshRole === "main")?.deviceModel ?? "";
+  const scale = Math.max(...levels) <= 3 && /\bBE\d/i.test(mainModel) ? 3 : 5;
+  return rows.map((row) =>
+    row.meshSignalLevel === null
+      ? row
+      : { ...row, meshSignalMax: Math.max(scale, Math.ceil(row.meshSignalLevel)) },
+  );
 };
 
 // Node trackers name their uplink only by MAC; resolve it against the other node rows of the

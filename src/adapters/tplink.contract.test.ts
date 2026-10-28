@@ -3,6 +3,8 @@ import { resolve } from "node:path";
 import { describe, expect, it } from "vitest";
 import {
   applyMeshParentNames,
+  applyMeshSignalScale,
+  meshSignalLevelColor,
   detectLinkRateUnit,
   isTrackerStateOnline,
   mapTrackerStateToRow,
@@ -344,5 +346,53 @@ describe("tplink_router EasyMesh node trackers", () => {
   it("is a no-op for rows without mesh parents", () => {
     const clientOnly = rows.filter((row) => row.meshRole === null);
     expect(applyMeshParentNames(clientOnly)).toBe(clientOnly);
+  });
+
+  describe("signal level scale", () => {
+    const scaled = (input: typeof rows) =>
+      new Map(applyMeshSignalScale(input).map((row) => [row.entity_id, row] as const));
+    const withMainModel = (model: string) =>
+      rows.map((row) => (row.meshRole === "main" ? { ...row, deviceModel: model } : row));
+
+    it("uses three bars behind a BE main router", () => {
+      const byId = scaled(rows);
+      expect(byId.get("device_tracker.virtual_re330_hall")?.meshSignalMax).toBe(3);
+      expect(byId.get("device_tracker.virtual_re330_attic")?.meshSignalMax).toBe(3);
+      expect(byId.get("device_tracker.virtual_re330_garage")?.meshSignalMax).toBeNull();
+      expect(byId.get("device_tracker.vm_phone_hall")?.meshSignalMax).toBeNull();
+    });
+
+    it("uses five bars behind other routers and when a node reports more than three", () => {
+      expect(scaled(withMainModel("Archer AX55")).get("device_tracker.virtual_re330_hall")?.meshSignalMax).toBe(5);
+      const aboveThree = rows.map((row) =>
+        row.entity_id === "device_tracker.virtual_re330_shed" ? { ...row, meshSignalLevel: 4 } : row,
+      );
+      expect(scaled(aboveThree).get("device_tracker.virtual_re330_hall")?.meshSignalMax).toBe(5);
+    });
+
+    it("uses five bars when the main router is not tracked", () => {
+      const noMain = rows.filter((row) => row.meshRole !== "main");
+      expect(scaled(noMain).get("device_tracker.virtual_re330_hall")?.meshSignalMax).toBe(5);
+    });
+
+    it("colours the level from bad to excellent across the scale", () => {
+      expect([1, 2, 3, 4, 5].map((level) => meshSignalLevelColor(level, 5))).toEqual([
+        "var(--signal-bad)",
+        "var(--signal-poor)",
+        "var(--signal-fair)",
+        "var(--signal-good)",
+        "var(--signal-excellent)",
+      ]);
+      expect([1, 2, 3].map((level) => meshSignalLevelColor(level, 3))).toEqual([
+        "var(--signal-bad)",
+        "var(--signal-fair)",
+        "var(--signal-excellent)",
+      ]);
+    });
+
+    it("is a no-op without signal levels", () => {
+      const clientOnly = rows.filter((row) => row.meshRole === null);
+      expect(applyMeshSignalScale(clientOnly)).toBe(clientOnly);
+    });
   });
 });

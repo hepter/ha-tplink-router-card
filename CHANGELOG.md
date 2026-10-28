@@ -4,7 +4,7 @@
 
 ### Added
 
-- `tplink_router` EasyMesh node trackers (integration v2.41.0+, #16): node rows show the node they uplink through in `apName` (main router badge when the parent is the main router), the backhaul signal level as bars in `signal`, `Wired` for a cabled backhaul, and opt-in `deviceType` (`Main Router` / `Satellite`), `deviceModel` and `clients` columns.
+- `tplink_router` EasyMesh node trackers (integration v2.41.0+, #16): node rows show the node they uplink through in `apName` (main router badge when the parent is the main router), the backhaul signal level as bars in `signal` (out of 3 behind a BE main router, out of 5 otherwise, coloured from bad to excellent across the scale, unfilled bars faded), `Wired` for a cabled backhaul, and opt-in `deviceType` (`Main Router` / `Satellite`), `deviceModel` and `clients` columns.
 - `mlo` header action group (hidden by default) for the `tplink_router` WIFI MLO switches; the `tplink_router` E-WAN connect switch joins the hidden `wan` group.
 - `tplink_deco`: the `Refresh Deco status` button (integration v3.12.0+) is offered in the `scanning` group.
 - Notice with the number of `device_tracker` entities the integration disabled in the selected entry (Home Assistant 2026.11+ creates new trackers disabled for several integrations).

@@ -95,7 +95,7 @@ Detailed matrix: `docs/integration-support.md`
 - `tplink_router`:
   - Full client table mapping from router tracker attributes.
   - EasyMesh: the optional `apName` column shows the node each client is attached to (integration v2.33.0+), clients on the main router get a badge. Add `apName` to `column_layout` to enable it.
-  - EasyMesh node trackers (integration v2.41.0+): every mesh node, the main router included, is a row. `apName` shows the node it uplinks through (`parent_mac` resolved to the node name, badge when that is the main router); `signal` shows the backhaul level as bars (the integration reports 1-3 bars on BE, up to 5 on AX, no dBm); a cabled backhaul shows `Wired`. Optional `deviceType` (`Main Router` / `Satellite`), `deviceModel` and `clients` (connected client count) fill these rows.
+  - EasyMesh node trackers (integration v2.41.0+): every mesh node, the main router included, is a row. `apName` shows the node it uplinks through (`parent_mac` resolved to the node name, badge when that is the main router); `signal` shows the backhaul level as filled bars out of 3 behind a BE main router and out of 5 behind other routers (the integration reports 1-3 bars on BE, up to 5 on AX, no dBm; a level above 3 always switches to 5), coloured from red at level 1 to green at the full scale; a cabled backhaul shows `Wired`. Optional `deviceType` (`Main Router` / `Satellite`), `deviceModel` and `clients` (connected client count) fill these rows.
   - Header action groups: WiFi and Guest WiFi bands, reboot and data fetching are shown by default; IoT bands, MLO WiFi bands, VPN server/client, the LAN DHCP server switch and the E-WAN connect switch exist but stay hidden until listed in `header_action_groups` (all hold to confirm).
 
 - `tplink_deco`:

@@ -717,6 +717,11 @@ export const cardStyles = css`
     background: var(--primary-color);
   }
 
+  .signal-level-bar.unfilled {
+    background: var(--secondary-text-color);
+    opacity: 0.3;
+  }
+
   .signal-strength-bar {
     display: inline-block;
     width: 44px;
