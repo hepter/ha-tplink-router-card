@@ -5,6 +5,7 @@
     "selectRouter": "Select a TP-Link router in card settings.",
     "noDevices": "No devices found for this router.",
     "noTrackersHint": "The selected entry exposes no device_tracker entities. On tplink_router make sure the integration option \"support_tracker\" is enabled.",
+    "disabledTrackersNotice": "{count} device trackers of this entry are disabled by the integration and are not shown. Enable them under Settings → Devices & services → Entities.",
     "devicesCount": "{count} devices",
     "onlineCount": "{online}/{total} online",
     "omadaClientLimitNotice": "Exactly 100 clients received. Omada Controller 6.x returns at most 100 clients per poll, so this list may be truncated.",
@@ -20,14 +21,17 @@
     "speedTooltipTransfer": "Transfer: {value}",
     "speedTooltipMbps": "Mbps: {value}/{max}",
     "cpuUsage": "CPU usage: {value}",
-    "memUsage": "Memory usage: {value}"
+    "memUsage": "Memory usage: {value}",
+    "meshSignalLevel": "Backhaul signal level {level}"
   },
   "labels": {
     "adoptFailed": "Adopt Failed",
     "switch": "Switch",
     "heartbeatMissed": "Heartbeat Missed",
     "decoSatellite": "Deco (Satellite)",
+    "satellite": "Satellite",
     "decoMaster": "Deco (Master)",
+    "mainRouter": "Main Router",
     "accessPoint": "Access Point",
     "managedExternally": "Managed Externally",
     "off": "Off",
@@ -49,6 +53,7 @@
     "offline": "Offline",
     "disconnected": "Disconnected",
     "connected": "Connected",
+    "controller": "Controller",
     "unknown": "Unknown",
     "upgrading": "Upgrading",
     "rebooting": "Rebooting"
@@ -110,6 +115,7 @@
       "scanning": "Data fetching",
       "wifi": "WiFi",
       "wan": "WAN connection",
+      "mlo": "MLO WiFi",
       "none": "Hide all groups",
       "dhcp": "DHCP server",
       "vpn": "VPN",

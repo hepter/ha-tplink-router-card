@@ -140,8 +140,26 @@ export const ALL_COLUMN_KEYS = [
 
 export type ColumnKey = (typeof ALL_COLUMN_KEYS)[number];
 
+// EasyMesh node trackers (tplink_router v2.41+) carry role, model and client count.
+const TPLINK_ROUTER_MESH_COLUMN_KEYS = ["deviceType", "deviceModel", "clients"] as const;
+
+const TPLINK_ROUTER_COLUMN_KEYS = [...COMMON_COLUMN_KEYS, ...TPLINK_ROUTER_MESH_COLUMN_KEYS] as const;
+
+// Opt-in only for these domains; other domains show the same keys by default.
+const DOMAIN_OPT_IN_COLUMN_KEYS: Partial<Record<SupportedIntegrationDomain, readonly ColumnKey[]>> = {
+  tplink_router: TPLINK_ROUTER_MESH_COLUMN_KEYS,
+};
+
+export const getOptInColumnsForDomain = (domain?: string): ReadonlySet<string> =>
+  new Set<string>([
+    ...OPT_IN_COLUMN_KEYS,
+    ...(domain && domain in DOMAIN_OPT_IN_COLUMN_KEYS
+      ? DOMAIN_OPT_IN_COLUMN_KEYS[domain as SupportedIntegrationDomain] ?? []
+      : []),
+  ]);
+
 const DOMAIN_COLUMN_KEYS: Record<SupportedIntegrationDomain, readonly ColumnKey[]> = {
-  tplink_router: COMMON_COLUMN_KEYS,
+  tplink_router: TPLINK_ROUTER_COLUMN_KEYS,
   tplink_deco: TPLINK_DECO_COLUMN_KEYS,
   omada: OMADA_COLUMN_KEYS,
   tplink_omada: TPLINK_OMADA_COLUMN_KEYS,

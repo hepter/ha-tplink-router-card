@@ -5,6 +5,7 @@
     "selectRouter": "Kart ayarlarından bir TP-Link router seçin.",
     "noDevices": "Bu router için kayıtlı cihaz bulunamadı.",
     "noTrackersHint": "Seçilen kayıt hiç device_tracker entity'sı sunmuyor. tplink_router için entegrasyon seçeneği \"support_tracker\" açık olmalı.",
+    "disabledTrackersNotice": "Bu entry'nin {count} cihaz izleyicisi entegrasyon tarafından devre dışı bırakılmış ve gösterilmiyor. Ayarlar → Cihazlar ve servisler → Varlıklar bölümünden etkinleştirebilirsiniz.",
     "devicesCount": "{count} cihaz",
     "onlineCount": "{online}/{total} online",
     "omadaClientLimitNotice": "Tam 100 istemci alındı. Omada Controller 6.x her sorguda en fazla 100 istemci döndürdüğü için liste kesilmiş olabilir.",
@@ -20,14 +21,17 @@
     "speedTooltipTransfer": "Aktarım: {value}",
     "speedTooltipMbps": "Mbps: {value}/{max}",
     "cpuUsage": "CPU kullanımı: {value}",
-    "memUsage": "Bellek kullanımı: {value}"
+    "memUsage": "Bellek kullanımı: {value}",
+    "meshSignalLevel": "Backhaul sinyal seviyesi {level}"
   },
   "labels": {
     "adoptFailed": "Benimseme başarısız",
     "switch": "Switch",
     "heartbeatMissed": "Sinyal kesildi",
     "decoSatellite": "Deco (Uydu)",
+    "satellite": "Uydu",
     "decoMaster": "Deco (Ana)",
+    "mainRouter": "Ana Router",
     "accessPoint": "Erişim noktası",
     "managedExternally": "Dışarıdan yönetiliyor",
     "off": "Kapalı",
@@ -49,6 +53,7 @@
     "offline": "Çevrimdışı",
     "disconnected": "Bağlı değil",
     "connected": "Bağlı",
+    "controller": "Controller",
     "unknown": "Bilinmiyor",
     "upgrading": "Güncelleniyor",
     "rebooting": "Yeniden başlatılıyor"
@@ -110,6 +115,7 @@
       "scanning": "Veri çekme",
       "wifi": "WiFi",
       "wan": "WAN bağlantısı",
+      "mlo": "MLO WiFi",
       "none": "Tüm grupları gizle",
       "dhcp": "DHCP sunucusu",
       "vpn": "VPN",

@@ -95,7 +95,8 @@ Detailed matrix: `docs/integration-support.md`
 - `tplink_router`:
   - Full client table mapping from router tracker attributes.
   - EasyMesh: the optional `apName` column shows the node each client is attached to (integration v2.33.0+), clients on the main router get a badge. Add `apName` to `column_layout` to enable it.
-  - Header action groups: WiFi and Guest WiFi bands, reboot and data fetching are shown by default; IoT bands, VPN server/client and the LAN DHCP server switch exist but stay hidden until listed in `header_action_groups` (all hold to confirm).
+  - EasyMesh node trackers (integration v2.41.0+): every mesh node, the main router included, is a row. `apName` shows the node it uplinks through (`parent_mac` resolved to the node name, badge when that is the main router); `signal` shows the backhaul level as bars (the integration reports 1-3 bars on BE, up to 5 on AX, no dBm); a cabled backhaul shows `Wired`. Optional `deviceType` (`Main Router` / `Satellite`), `deviceModel` and `clients` (connected client count) fill these rows.
+  - Header action groups: WiFi and Guest WiFi bands, reboot and data fetching are shown by default; IoT bands, MLO WiFi bands, VPN server/client, the LAN DHCP server switch and the E-WAN connect switch exist but stay hidden until listed in `header_action_groups` (all hold to confirm).
 
 - `tplink_deco`:
   - Client/deco table mapping from `device_tracker.*` entities.
@@ -103,7 +104,7 @@ Detailed matrix: `docs/integration-support.md`
   - Upload/download speed values are normalized automatically.
   - Optional `apName` shows the parent Deco of each client; `hostname` uses the raw client name (`ui_device_name`, integration v3.8.0+).
   - Deco nodes show their mesh role in `deviceType` (`Deco (Master)` / `Deco (Satellite)`).
-  - The integration's `Polling` switch is offered in the `scanning` header group.
+  - The integration's `Polling` switch and the `Refresh Deco status` button (integration v3.12.0+) are offered in the `scanning` header group.
 
 - Omada (`omada`, HACS `ha-omada`):
   - Device-based row mapping with controller client data.
@@ -124,10 +125,12 @@ Detailed matrix: `docs/integration-support.md`
   - `signalStrength` shows the controller's signal quality (the integration's `Signal strength` percentage sensor) as a coloured bar next to the RSSI `signal` column; it is part of the default layout for this integration.
   - Extra columns: `downloaded`, `uploaded`, `snr`, `powerSave`, `deviceType`, `deviceModel`, `deviceFirmware` (with a badge when the `update` entity reports a newer firmware), `deviceStatus`; optional `apName`, `ssid`, `connectedTo` (AP, switch or gateway name), `vendor` (client manufacturer from the device registry), `clients` (connected client count of an AP / switch / gateway), `cpu`, `memory`, `uplink` (uplink device and port of an AP / switch). `channel`, `wifiMode`, `lastSeen`, packet counters (`packetsSent`, `packetsReceived`) and link rates (`tx`, `rx`) are not published by the integration and are not offered.
   - Entities exist only for the clients selected in the integration's config flow (`selected_clients`).
+  - Auto-discovered client trackers (integration v1.12.0+, opt-in) carry RSSI, SNR and signal quality as attributes; the card reads them, and `connectedTo` falls back to the parent device of the client.
 
 - Omada (`tplink_omada`, Home Assistant Core):
   - Client rows come from the core scanner entities (name, hostname, IP, MAC, status only); all clients are wireless.
   - Device rows (gateway / switch / access point) use the device registry for `deviceType`, `deviceModel`, `deviceFirmware`, `deviceStatus`.
+  - The controller device (Home Assistant 2026.10+) is a `Controller` row with its firmware update badge.
   - The `actions` column offers "Reconnect client" (hold to confirm) through the `tplink_omada.reconnect_client` service.
   - Gateway `WAN connect` switches are offered in the hidden-by-default `wan` header group; port PoE switches appear as row actions of the switch device and require a hold.
   - `apName`, `channel`, `wifiMode`, `lastSeen`, `snr`, `powerSave`, `downloaded`, `uploaded` are not available from core and are not offered.
@@ -137,6 +140,8 @@ Notes:
 - If an action cannot be matched safely, it is hidden by design.
 - Integration-specific attributes are parsed with safe fallbacks. Missing fields never crash the card and are rendered as `—`.
 - Online detection accepts any tracker state other than `not_home` / `unavailable` / `unknown`, so trackers associated with a custom Home Assistant zone (core 2026.6+) still count as connected.
+- Home Assistant 2026.11+ creates new `device_tracker` entities disabled for integrations that do not opt in (ha-omada, ha-tplink-deco, ha-omada-open-api, core tplink_omada). Clients and Deco nodes whose tracker is disabled are not rows; Omada access points, switches, gateways and controllers stay listed from their sensors. The card shows how many trackers of the entry the integration disabled.
+- Action icons come from the entity's `icon` attribute; when an integration publishes its icons only through `icons.json`, the card picks an icon from the action role (block, reconnect, reboot, ...) or its name (LED, PoE, radio, ...).
 
 ## Installation
 
@@ -276,6 +281,11 @@ Optional keys, never part of the default layout, add them to `column_layout` whe
 ```yaml
 # tplink_router (EasyMesh node), tplink_deco (parent Deco), omada / omada_open_api (access point)
 - apName
+
+# tplink_router EasyMesh node rows (integration v2.41.0+)
+- deviceType   # Main Router / Satellite
+- deviceModel  # node model
+- clients      # clients connected to the node
 
 # omada (HACS ha-omada) only
 - channel    # wireless channel
@@ -455,7 +465,7 @@ Options:
 - `show_hidden_entities`: Show hidden switch/button entities in action areas. Default `false`.
 - `header_action_render`: Header action button style: `icon | name | icon_name`. Default `icon`. Works across all supported integrations when header actions exist.
 - `row_action_render`: Row action button style: `icon | name | icon_name`. Default `icon`. Currently effective for Omada row actions (`omada` / `omada_open_api` / `tplink_omada`).
-- `header_action_groups`: Which header action groups to show. Keys: `wifi`, `guest`, `iot`, `reboot`, `scanning`, `controller`, `vpn`, `dhcp`, `wan`; `all` shows every group, `none` hides every header action, an empty list (what the card editor stores when nothing is selected) keeps the default. Default `[wifi, guest, reboot, scanning, controller]`. See "Header action groups" below.
+- `header_action_groups`: Which header action groups to show. Keys: `wifi`, `guest`, `iot`, `mlo`, `reboot`, `scanning`, `controller`, `vpn`, `dhcp`, `wan`; `all` shows every group, `none` hides every header action, an empty list (what the card editor stores when nothing is selected) keeps the default. Default `[wifi, guest, reboot, scanning, controller]`. See "Header action groups" below.
 - `shift_click_underline`: Show Shift+click underline hints for entity-clickable cells (currently Omada-only visual behavior).
 - `hide_header`: Hide the header area.
 - `hide_filter_section`: Hide the filter section.
@@ -500,7 +510,7 @@ The fallback colors are green (`#3aa45b`) and red (`#d32f2f`).
 Rules:
 - Column order follows `column_layout` order.
 - Only columns valid for the selected integration domain are rendered.
-- `apName`, `channel`, `wifiMode`, `lastSeen`, `ssid`, `connectedTo`, `vendor`, `clients`, `cpu`, `memory` and `uplink` are opt-in: they are never part of the default layout and appear only when listed in `column_layout` (or legacy `columns`).
+- `apName`, `channel`, `wifiMode`, `lastSeen`, `ssid`, `connectedTo`, `vendor`, `clients`, `cpu`, `memory` and `uplink` are opt-in: they are never part of the default layout and appear only when listed in `column_layout` (or legacy `columns`). On `tplink_router`, `deviceType` and `deviceModel` are opt-in too.
 - Sorting treats `—` cells as empty: offline rows (and wired rows for `signal`, `signalStrength`, `snr`) and `0.0.0.0` IP addresses stay at the end in both directions.
 - Sticky behavior is applied only to columns marked with `fixed: start|end`.
 - Sticky columns use edge shadow indicators during horizontal scroll.
@@ -519,14 +529,15 @@ Every matched header action belongs to one group. Only the groups listed in `hea
 | `wifi` | Main Wi-Fi band switches, Omada AP radio switches, `omada_open_api` per-AP SSID switches whose SSID name carries a band | shown |
 | `guest` | Guest Wi-Fi band switches, `omada_open_api` SSID switches whose name contains "guest" | shown |
 | `iot` | IoT Wi-Fi band switches, `omada_open_api` SSID switches whose name contains "iot" | hidden |
+| `mlo` | `tplink_router` WIFI MLO 2.4G / 5G / 6G switches (integration v2.41.0+; some firmware rejects toggling them) | hidden |
 | `reboot` | Reboot / restart buttons | shown |
-| `scanning` | `tplink_router` "Router data fetching", `tplink_deco` "Polling" | shown |
+| `scanning` | `tplink_router` "Router data fetching", `tplink_deco` "Polling" and "Refresh Deco status" | shown |
 | `controller` | Omada "Reconnect All Clients", "WLAN Optimization" (`omada`, `omada_open_api`) | shown |
 | `vpn` | `tplink_router` OpenVPN, PPTP, IPsec and VPN client switches | hidden |
 | `dhcp` | `tplink_router` LAN IPv4 DHCP server switch | hidden |
-| `wan` | core `tplink_omada` gateway WAN connect switches | hidden |
+| `wan` | core `tplink_omada` gateway WAN connect switches, `tplink_router` E-WAN connect switch | hidden |
 
-IoT, VPN, DHCP and WAN can cut your own access to the network, so they stay hidden until you opt in:
+IoT, MLO, VPN, DHCP and WAN can cut your own access to the network, so they stay hidden until you opt in:
 
 ```yaml
 type: custom:tplink-router-card
@@ -582,12 +593,12 @@ Export behavior:
 ## Virtual Modem Lab
 For local end-to-end testing with real integration setup flows, a virtual device lab is included:
 
-- `virtual_modems/tplink_router_be230` (for `tplink_router`, EasyMesh with two satellites)
+- `virtual_modems/tplink_router_be230` (for `tplink_router`, EasyMesh node trackers: main router, a wireless satellite, a cabled two-hop satellite and a disconnected satellite; runs next to the `lab` profile on another port, e.g. `8081`)
 - `virtual_modems/tplink_deco_x50` (for `tplink_deco`, master + two satellites)
 - `virtual_modems/omada_controller` (shared by `omada`, `tplink_omada` and `omada_open_api`; serves the legacy controller API and the Omada Open API with OAuth2 client credentials on the same port, optional Omada 6.x mode)
 - `lab` profile: Omada controller and Deco X50 together on one port
 
-The mocks follow the current integration releases (`tplinkrouterc6u` 5.32.x, `ha-tplink-deco` 3.10.x, `ha-omada` 0.10.x, `ha-omada-open-api` 1.10.x, `tplink-omada-api` 1.5.x). Every virtual device is marked (MAC prefix `02:56:4D`, names `Virtual` / `vm-`, firmware `(virtual)`), and `virtual_modems/tools/ha_virtual_cleanup.py` lists, enables, disables, prunes or deletes the matching Home Assistant config entries in bulk. Background start/stop scripts exist for Windows and Linux.
+The mocks follow the current integration releases (`tplink_router` 2.44.x with `tplinkrouterc6u` 5.37.x, `ha-tplink-deco` 3.12.x, `ha-omada` 0.10.x, `ha-omada-open-api` 1.11.x, core `tplink_omada` with `tplink-omada-client` 1.5.13). Every virtual device is marked (MAC prefix `02:56:4D`, names `Virtual` / `vm-`, firmware `(virtual)`), and `virtual_modems/tools/ha_virtual_cleanup.py` lists, enables, disables, prunes or deletes the matching Home Assistant config entries in bulk. Background start/stop scripts exist for Windows and Linux.
 
 See `virtual_modems/README.md` for setup and run commands.
 
@@ -599,10 +610,12 @@ See `virtual_modems/README.md` for setup and run commands.
 - Stale values right after a Home Assistant restart on `tplink_router`: trackers are restored from the last known state until the first poll completes.
 - Missing metadata/tooltips: some routers/integrations do not expose full router details.
 - No action icons: action entities may be unsupported, unavailable, or intentionally filtered for safety.
-- A header button you expect is missing (IoT, VPN, DHCP, WAN): add its group to `header_action_groups`; these groups are hidden by default.
+- A header button you expect is missing (IoT, MLO, VPN, DHCP, WAN): add its group to `header_action_groups`; these groups are hidden by default.
+- "device trackers of this entry are disabled" notice: Home Assistant 2026.11+ creates new trackers disabled for several integrations. Enable the ones you want under Settings → Devices & services → Entities; the card lists them after the next refresh.
+- `tplink_deco` shows no trackers after updating to Home Assistant 2026.11: ha-tplink-deco 3.10.4 and older fail to set up there, update the integration to 3.10.5 or newer.
 - A client is missing on `omada_open_api`: the integration creates entities only for the clients selected in its config flow; add the client in the integration's options (client selection).
 - The card still shows the previous version after an update: Home Assistant and HACS cache the bundle for a short time; wait a minute, then hard-refresh the browser (clear the site data if a service worker keeps serving the old file).
-- Omada Controller 6.x (`omada`): the integration currently fetches at most 100 clients per poll (the card shows a notice when exactly 100 arrive) and its Reconnect button is broken on v6 until upstream PR #164 lands.
+- Omada Controller 6.x (`omada`): the integration currently fetches at most 100 clients per poll (the card shows a notice when exactly 100 arrive). Its Reconnect button fails on v6 in the 0.10.0 release; the fix (upstream PR #164) is merged but not released yet.
 
 ## Changelog
 See [`CHANGELOG.md`](CHANGELOG.md).

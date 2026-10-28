@@ -8,6 +8,7 @@ export type HeaderActionGroup =
   | "wifi"
   | "guest"
   | "iot"
+  | "mlo"
   | "reboot"
   | "scanning"
   | "controller"
@@ -19,6 +20,7 @@ export const HEADER_ACTION_GROUPS: readonly HeaderActionGroup[] = [
   "wifi",
   "guest",
   "iot",
+  "mlo",
   "reboot",
   "scanning",
   "controller",
@@ -27,7 +29,7 @@ export const HEADER_ACTION_GROUPS: readonly HeaderActionGroup[] = [
   "wan",
 ];
 
-// Groups that can lock the operator out (DHCP, VPN, WAN) or are rarely toggled (IoT) stay opt-in.
+// Groups that can lock the operator out (DHCP, VPN, WAN) or are rarely toggled (IoT, MLO) stay opt-in.
 export const DEFAULT_HEADER_ACTION_GROUPS: readonly HeaderActionGroup[] = [
   "wifi",
   "guest",
@@ -82,6 +84,12 @@ export const matchAction = (
     if (text.includes("reboot") || text.includes("restart")) {
       return { kind: "router", group: "reboot", requiresHold: true };
     }
+    if (
+      integrationDomain === "tplink_deco" &&
+      (text.includes("refresh_deco_status") || text.includes("refresh deco status"))
+    ) {
+      return { kind: "router", group: "scanning", requiresHold: false };
+    }
     if (isOmadaIntegration && text.includes("reconnect")) {
       return { kind: "router", group: "controller", requiresHold: true };
     }
@@ -113,6 +121,13 @@ export const matchAction = (
     return { kind: "iot", group: "iot", band, requiresHold: true };
   }
 
+  // tplink_router v2.41+ MLO switches share the WiFi band wording; c6u firmware rejects toggling them.
+  if (integrationDomain === "tplink_router" && /\bmlo\b|_mlo_/.test(text)) {
+    const band = parseBand(text);
+    if (!band) return null;
+    return { kind: "host", group: "mlo", band, requiresHold: true };
+  }
+
   if (integrationDomain === "tplink_router" && text.includes("vpn")) {
     return { kind: "router", group: "vpn", requiresHold: true };
   }
@@ -120,6 +135,12 @@ export const matchAction = (
     return { kind: "router", group: "dhcp", requiresHold: true };
   }
   if (integrationDomain === "tplink_omada" && text.includes("wan_connect")) {
+    return { kind: "router", group: "wan", requiresHold: true };
+  }
+  if (
+    integrationDomain === "tplink_router" &&
+    (text.includes("e_wan_connect") || text.includes("e-wan connect"))
+  ) {
     return { kind: "router", group: "wan", requiresHold: true };
   }
 

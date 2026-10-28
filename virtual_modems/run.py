@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import atexit
 import argparse
+import ctypes
 import importlib
 import json
 import os
@@ -31,14 +32,39 @@ MODEM_PROFILES = {"tplink_router_be230", "tplink_deco_x50", "omada_controller", 
 # `lab` serves these two profiles on one port; their HTTP paths do not overlap.
 LAB_PROFILES = ("omada_controller", "tplink_deco_x50")
 
+_PROCESS_QUERY_LIMITED_INFORMATION = 0x1000
+_ERROR_ACCESS_DENIED = 5
+_STILL_ACTIVE = 259
 
-def _active_modem_file() -> Path:
-    return Path(tempfile.gettempdir()) / "virtual_modems" / "active_modem.json"
+
+def _active_modem_file(port: int) -> Path:
+    return Path(tempfile.gettempdir()) / "virtual_modems" / f"active_modem_{port}.json"
+
+
+def _is_windows_pid_running(pid: int) -> bool:
+    kernel32 = ctypes.WinDLL("kernel32", use_last_error=True)
+    kernel32.OpenProcess.restype = ctypes.c_void_p
+    kernel32.GetExitCodeProcess.argtypes = (ctypes.c_void_p, ctypes.POINTER(ctypes.c_ulong))
+    kernel32.CloseHandle.argtypes = (ctypes.c_void_p,)
+    handle = kernel32.OpenProcess(_PROCESS_QUERY_LIMITED_INFORMATION, False, pid)
+    if not handle:
+        return ctypes.get_last_error() == _ERROR_ACCESS_DENIED
+    try:
+        exit_code = ctypes.c_ulong()
+        if not kernel32.GetExitCodeProcess(handle, ctypes.byref(exit_code)):
+            return False
+        return exit_code.value == _STILL_ACTIVE
+    finally:
+        kernel32.CloseHandle(handle)
 
 
 def _is_pid_running(pid: int) -> bool:
     if pid <= 0:
         return False
+    if os.name == "nt":
+        # os.kill(pid, 0) is no probe on Windows: signal 0 is CTRL_C_EVENT and CPython falls back
+        # to TerminateProcess, which killed the runner holding the lock.
+        return _is_windows_pid_running(pid)
     try:
         os.kill(pid, 0)
     except OSError:
@@ -50,7 +76,7 @@ def _acquire_modem_lock(profile: str, host: str, port: int) -> None:
     if profile not in MODEM_PROFILES:
         return
 
-    state_file = _active_modem_file()
+    state_file = _active_modem_file(port)
     state_file.parent.mkdir(parents=True, exist_ok=True)
     current_pid = os.getpid()
 
@@ -65,10 +91,9 @@ def _acquire_modem_lock(profile: str, host: str, port: int) -> None:
         existing_pid = int(existing.get("pid") or 0)
         if existing_pid and existing_pid != current_pid and _is_pid_running(existing_pid):
             existing_profile = str(existing.get("profile") or "unknown")
-            existing_port = int(existing.get("port") or 0)
             raise RuntimeError(
-                f"Another modem profile is already running: "
-                f"profile={existing_profile} pid={existing_pid} port={existing_port}"
+                f"Port {port} is already used by another modem profile: "
+                f"profile={existing_profile} pid={existing_pid}"
             )
 
     state = {
@@ -159,17 +184,18 @@ def _fixture_path(filename: str) -> Path:
     return Path(__file__).resolve().parent / "data" / filename
 
 
-def _print_profile_details(profile: str) -> None:
+def _print_profile_details(profile: str, port: int) -> None:
     if profile == "lab":
         for member in LAB_PROFILES:
-            _print_profile_details(member)
+            _print_profile_details(member, port)
         return
+    host_hint = "http://<ip>" if port == 80 else f"http://<ip>:{port}"
     try:
         if profile == "tplink_router_be230":
             data = json.loads(_fixture_path("tplink_router_be230.json").read_text(encoding="utf-8"))
             router = data.get("router", {})
             print("[virtual_modems] login hints:")
-            print("  - host: http://<ip>")
+            print(f"  - host: {host_hint}")
             print("  - username: admin")
             print("  - password: admin")
             print("[virtual_modems] fake router:")
@@ -178,6 +204,9 @@ def _print_profile_details(profile: str) -> None:
             print(f"  - firmware: {router.get('firmware_version', '-')}")
             print(f"  - lan ip (fixture): {router.get('lan_ipv4_ipaddr', '-')}")
             print(f"  - wan ip (fixture): {router.get('wan_ipv4_ipaddr', '-')}")
+            for node in data.get("mesh", {}).get("nodes", []):
+                link = node.get("connect_type") or node.get("role")
+                print(f"  - mesh node: {node.get('name')} ({link}, {node.get('status')})")
             print("")
             return
 
@@ -185,7 +214,7 @@ def _print_profile_details(profile: str) -> None:
             data = json.loads(_fixture_path("tplink_deco_x50.json").read_text(encoding="utf-8"))
             master = (data.get("decos") or [{}])[0]
             print("[virtual_modems] login hints:")
-            print("  - host: http://<ip>")
+            print(f"  - host: {host_hint}")
             print("  - password: any value (mock)")
             print("[virtual_modems] fake deco:")
             print(f"  - model: {master.get('device_model', '-')}")
@@ -203,13 +232,13 @@ def _print_profile_details(profile: str) -> None:
             client_id = os.getenv("VMODEM_OAPI_CLIENT_ID", "virtual-open-api")
             client_secret = os.getenv("VMODEM_OAPI_CLIENT_SECRET", "virtual-open-api-secret")
             print("[virtual_modems] login hints (omada / tplink_omada):")
-            print("  - host: http://<ip>")
+            print(f"  - host: {host_hint}")
             print("  - IMPORTANT: include 'http://' in host field")
             print(f"  - username: {username}")
             print(f"  - password: {password}")
             print("[virtual_modems] login hints (omada_open_api):")
             print("  - controller type: Self-Hosted (Local Controller)")
-            print("  - api url: http://<ip>")
+            print(f"  - api url: {host_hint}")
             print(f"  - omada id: {controller.get('id', '-')}")
             print(f"  - client id: {client_id}")
             print(f"  - client secret: {client_secret}")
@@ -248,7 +277,7 @@ def main() -> None:
 
     app = _load_profile(args.profile)
     _print_startup_urls(args.profile, host, port)
-    _print_profile_details(args.profile)
+    _print_profile_details(args.profile, port)
     uvicorn.run(app, host=host, port=port)
 
 

@@ -250,11 +250,19 @@ class TplinkRouterBe230Mock:
     def handle_smart_network(self) -> JSONResponse:
         return self.make_success(self._runtime_smart_network())
 
+    def _online_node_clients(self, node: dict[str, Any], online_macs: set[str]) -> list[dict[str, Any]]:
+        return [
+            client
+            for client in node.get("clients") or []
+            if not online_macs or self._normalize_mac(str(client.get("mac", ""))) in online_macs
+        ]
+
     def handle_easymesh_device_list(self) -> JSONResponse:
+        online_macs = self._online_macs()
         nodes: list[dict[str, Any]] = []
         for node in self.fixture["mesh"]["nodes"]:
             item = {key: value for key, value in node.items() if key != "clients"}
-            item["client_num"] = len(node.get("clients") or [])
+            item["client_num"] = len(self._online_node_clients(node, online_macs))
             nodes.append(item)
         return self.make_success(nodes)
 
@@ -264,18 +272,12 @@ class TplinkRouterBe230Mock:
         for node in self.fixture["mesh"]["nodes"]:
             if self._normalize_mac(str(node.get("mac", ""))) != target:
                 continue
-            entries: list[dict[str, Any]] = []
-            for client in node.get("clients") or []:
-                client_mac = self._normalize_mac(str(client.get("mac", "")))
-                if online_macs and client_mac not in online_macs:
-                    continue
-                entries.append(copy.deepcopy(client))
             return self.make_success(
                 {
                     "mac": node.get("mac"),
                     "name": node.get("name"),
                     "role": node.get("role"),
-                    "mesh_nclient_list": entries,
+                    "mesh_nclient_list": copy.deepcopy(self._online_node_clients(node, online_macs)),
                 }
             )
         return self.make_success({"mesh_nclient_list": []})
@@ -309,6 +311,25 @@ class TplinkRouterBe230Mock:
                 "remote": ipv4.get("remote", "off"),
             }
         )
+
+    def handle_wan_ipv4_dynamic(self, operation: str) -> JSONResponse:
+        wan = self.fixture["wan_ipv4_dynamic"]
+        if operation in {"renew", "release"}:
+            wan["conn_status"] = "connected" if operation == "renew" else "disconnected"
+            return self.make_success({})
+
+        router = self.fixture["router"]
+        ipv4 = self.fixture["ipv4"]
+        lease = {
+            "ipaddr": router["wan_ipv4_ipaddr"],
+            "netmask": ipv4["wan_ipv4_netmask"],
+            "gateway": router["wan_ipv4_gateway"],
+            "pri_dns": ipv4["wan_ipv4_pridns"],
+            "snd_dns": ipv4["wan_ipv4_snddns"],
+        }
+        if wan["conn_status"] != "connected":
+            lease = dict.fromkeys(lease, "0.0.0.0")
+        return self.make_success({**wan, **lease})
 
     def handle_network_ipv6(self) -> JSONResponse:
         return self.make_success(dict(self.fixture["ipv6"]))
@@ -381,7 +402,11 @@ class TplinkRouterBe230Mock:
             if entry:
                 reservations.append(entry)
             return self.make_success({"inserted": True})
-        if operation in {"update", "remove", "delete"}:
+        if operation == "remove":
+            key = self._normalize_mac(str(params.get("key", "")))
+            reservations[:] = [item for item in reservations if self._normalize_mac(str(item.get("mac", ""))) != key]
+            return self.make_success({})
+        if operation == "update":
             return self.make_success({"updated": True})
         return self.make_success([copy.deepcopy(item) for item in reservations])
 
@@ -543,6 +568,8 @@ def create_app() -> FastAPI:
                     return mock.handle_network_ipv6()
                 if form == "wan_ipv6_dynamic":
                     return mock.handle_network_ipv6_dynamic()
+                if form == "wan_ipv4_dynamic":
+                    return mock.handle_wan_ipv4_dynamic(operation)
                 return mock.handle_network_ipv4()
 
             if endpoint == "admin/smart_network":

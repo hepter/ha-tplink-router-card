@@ -16,4 +16,15 @@ describe("default column selection", () => {
   it("never adds keys outside the allowed set", () => {
     expect(selectDefaultColumnKeys(ordered, allowed)).not.toContain("actions");
   });
+
+  it("keeps the tplink_router mesh columns opt-in while other domains show them by default", () => {
+    const keys = ["name", "deviceType", "deviceModel", "clients"];
+    const domainAllowed = new Set(keys);
+    expect(selectDefaultColumnKeys(keys, domainAllowed, "tplink_router")).toEqual(["name"]);
+    expect(selectDefaultColumnKeys(keys, domainAllowed, "tplink_deco")).toEqual([
+      "name",
+      "deviceType",
+      "deviceModel",
+    ]);
+  });
 });

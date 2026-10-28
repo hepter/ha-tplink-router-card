@@ -32,6 +32,9 @@ export type OmadaRowOptions = {
   // connection attributes, so the wired fallback would mislabel every client.
   assumeWirelessClients?: boolean;
   locale?: string;
+  // omada_open_api links client devices to their AP / switch through via_device_id; its
+  // auto-discovered trackers publish no connected_ap / connected_switch.
+  connectedToFromViaDevice?: boolean;
 };
 
 type OmadaClientMetrics = {
@@ -503,7 +506,29 @@ const inferDeviceTypeFromModel = (model?: string) => {
   if (text.startsWith("eap")) return "Access Point";
   if (text.startsWith("er")) return "Gateway";
   if (text.startsWith("sg") || text.startsWith("tl-sg")) return "Switch";
+  // Exact names only: omada_open_api fills a client device's model with the client category.
+  if (/^oc\d/.test(text) || /^(omada )?controller$/.test(text)) return "Controller";
   return undefined;
+};
+
+const isOmadaInfrastructureGroup = (
+  entries: EntityRegistryEntry[],
+  device: DeviceRegistryEntry | undefined,
+) =>
+  entries.some((entry) => entry.entity_id.startsWith("update.")) ||
+  inferDeviceTypeFromModel(device?.model) !== undefined;
+
+const resolveConnectedToFromViaDevice = (
+  row: MappedTrackerRow,
+  device: DeviceRegistryEntry | undefined,
+  devicesById: ReadonlyMap<string, DeviceRegistryEntry>,
+  enabled: boolean,
+): MappedTrackerRow => {
+  if (!enabled || row.connectedTo !== "—" || !device?.via_device_id) return row;
+  const parent = devicesById.get(device.via_device_id);
+  if (!parent || parent.model === OMADA_SITE_DEVICE_MODEL) return row;
+  const name = (parent.name_by_user ?? parent.name ?? "").trim();
+  return name ? { ...row, connectedTo: name } : row;
 };
 
 const enrichRowWithDevice = (
@@ -746,6 +771,20 @@ const applyOmadaDeviceContext = (
   };
 };
 
+// ha-omada hangs the site-wide buttons on the controller device; its "Reconnect All Clients"
+// button would otherwise mark the row as a WiFi client.
+const isOmadaControllerGroup = (states: HassEntity[]) =>
+  states.some((state) => {
+    if (!state.entity_id.startsWith("button.")) return false;
+    const text = `${state.entity_id} ${String(state.attributes.friendly_name ?? "")}`.toLowerCase();
+    return (
+      text.includes("wlan optimization") ||
+      text.includes("wlan_optimization") ||
+      text.includes("rf planning") ||
+      text.includes("reconnect all")
+    );
+  });
+
 const buildRowFromDeviceOnlyStates = (
   deviceId: string,
   states: HassEntity[],
@@ -759,12 +798,25 @@ const buildRowFromDeviceOnlyStates = (
   if (!primary) return null;
 
   const attrs = primary.attributes as Record<string, unknown>;
-  const status = pickStatusFromStates(states);
-  const normalizedType = normalizeDeviceType(
-    attrs.type ?? attrs.device_type ?? inferDeviceTypeFromModel(device?.model),
+  const isController = isOmadaControllerGroup(states);
+  // A controller has no presence entity: its binary sensors (WLAN optimization running) are not a
+  // connection state, so reachable entities mean online.
+  const controllerReachable = states.some(
+    (state) => String(state.state).toLowerCase() !== "unavailable",
   );
+  const status = isController
+    ? { isOnline: controllerReachable, raw: controllerReachable ? "Connected" : "Disconnected" }
+    : pickStatusFromStates(states);
+  const normalizedType = isController
+    ? "Controller"
+    : normalizeDeviceType(
+      attrs.type ?? attrs.device_type ?? inferDeviceTypeFromModel(device?.model),
+    );
   const connectionLabel =
-    normalizedType === "Gateway" || normalizedType === "Switch" || normalizedType === "Access Point"
+    normalizedType === "Gateway" ||
+    normalizedType === "Switch" ||
+    normalizedType === "Access Point" ||
+    normalizedType === "Controller"
       ? normalizedType
       : "Wired";
 
@@ -853,6 +905,9 @@ const buildRowFromDeviceOnlyStates = (
     wifiModeValue: null,
     lastSeen: "—",
     lastSeenValue: null,
+    meshRole: null,
+    meshParentMac: null,
+    meshSignalLevel: null,
     ssid: "—",
     connectedTo: metrics?.connectedTo ?? "—",
     vendor: "—",
@@ -1014,8 +1069,14 @@ export const mapOmadaStateToRow = (
     metrics?.uptimeSeconds ??
     parseUptimeSeconds(attrs.uptime ?? attrs.online_time ?? attrs.connected_since) ??
     null;
-  const signalValue = toNumber(attrs.rssi ?? attrs.signal) ?? metrics?.rssi ?? null;
-  const snrValue = toNumber(attrs.snr) ?? metrics?.snr ?? null;
+  const signalValue = toNumber(attrs.rssi ?? attrs.signal ?? attrs.rssi_dbm) ?? metrics?.rssi ?? null;
+  const snrValue = toNumber(attrs.snr ?? attrs.snr_db) ?? metrics?.snr ?? null;
+  // omada_open_api 1.12 auto-discovered trackers carry the quality percentage as an attribute.
+  const attrSignalPercent = toNumber(attrs.signal_strength_percent);
+  const rowMetrics =
+    attrSignalPercent === null || metrics?.signalPercent != null
+      ? metrics
+      : { ...(metrics ?? defaultMetrics()), signalPercent: attrSignalPercent };
   const powerSaveRaw = attrs.power_save ?? attrs.powerSave;
   const powerSaveValue =
     String(powerSaveRaw).toLowerCase() === "on" || powerSaveRaw === true
@@ -1088,10 +1149,13 @@ export const mapOmadaStateToRow = (
     wifiModeValue: wifiMode.generation,
     lastSeen: formatDateTime(lastSeenValue, options?.locale),
     lastSeenValue,
+    meshRole: null,
+    meshParentMac: null,
+    meshSignalLevel: null,
     ssid,
     connectedTo,
     vendor: safeString(attrs.vendor ?? "—"),
-    ...metricsFromStates([], metrics),
+    ...metricsFromStates([], rowMetrics),
     deviceType,
     deviceModel,
     deviceFirmware,
@@ -1153,6 +1217,16 @@ export const buildOmadaRows = (
 
     // Device-less controls (omada_open_api site LED / WLAN optimization) describe no client.
     if (!tracker && !deviceId) continue;
+    // HA 2026.11 creates scanner trackers disabled; a client's remaining switches and sensors
+    // would otherwise produce a row whose state is guessed from a block switch. Access points,
+    // switches, gateways and controllers keep their sensor-based row.
+    if (
+      !tracker &&
+      !isOmadaInfrastructureGroup(entries, device) &&
+      entries.some((entry) => entry.entity_id.startsWith("device_tracker.") && entry.disabled_by)
+    ) {
+      continue;
+    }
 
     if (tracker) {
       const row = enrichRowWithControllerClientLookup(
@@ -1168,7 +1242,14 @@ export const buildOmadaRows = (
           byName: controllerClientLookup.byName,
         },
       );
-      rows.push(enrichRowWithDevice(row, device));
+      rows.push(
+        resolveConnectedToFromViaDevice(
+          enrichRowWithDevice(row, device),
+          device,
+          devicesById,
+          options?.connectedToFromViaDevice === true,
+        ),
+      );
       continue;
     }
 

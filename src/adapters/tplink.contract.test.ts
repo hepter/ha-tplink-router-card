@@ -2,6 +2,7 @@ import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
 import { describe, expect, it } from "vitest";
 import {
+  applyMeshParentNames,
   detectLinkRateUnit,
   isTrackerStateOnline,
   mapTrackerStateToRow,
@@ -260,5 +261,88 @@ describe("tplink adapter contract fixtures", () => {
     expect(row.wifiModeValue).toBeNull();
     expect(row.lastSeen).toBe("—");
     expect(row.lastSeenValue).toBeNull();
+  });
+});
+
+describe("tplink_router EasyMesh node trackers", () => {
+  const fixture = loadFixture<{
+    entryId: string;
+    states: Record<string, HassEntity>;
+    entityRegistry: EntityRegistryEntry[];
+  }>("easymesh_node_trackers.json");
+  const trackers = selectRouterTrackers(fixture.states, fixture.entityRegistry, fixture.entryId, false);
+  const rows = applyMeshParentNames(
+    trackers.map((state) => mapTrackerStateToRow(state, "MBps", detectLinkRateUnit(trackers))),
+  );
+  const byEntity = new Map(rows.map((row) => [row.entity_id, row] as const));
+
+  it("recognises node trackers by is_main_router and leaves client rows alone", () => {
+    expect(byEntity.get("device_tracker.virtual_archer_be550")?.meshRole).toBe("main");
+    expect(byEntity.get("device_tracker.virtual_re330_hall")?.meshRole).toBe("satellite");
+    expect(byEntity.get("device_tracker.vm_phone_hall")?.meshRole).toBeNull();
+    expect(byEntity.get("device_tracker.vm_phone_hall")?.meshSignalLevel).toBeNull();
+  });
+
+  it("resolves parent_mac to the parent node name and badges the main router", () => {
+    const hall = byEntity.get("device_tracker.virtual_re330_hall");
+    expect(hall?.apName).toBe("Virtual Archer BE550");
+    expect(hall?.apIsMainNode).toBe(true);
+    const garage = byEntity.get("device_tracker.virtual_re330_garage");
+    expect(garage?.apName).toBe("Virtual RE330 Hall");
+    expect(garage?.apIsMainNode).toBe(false);
+    const main = byEntity.get("device_tracker.virtual_archer_be550");
+    expect(main?.apName).toBe("—");
+    expect(main?.apIsMainNode).toBe(false);
+  });
+
+  it("keeps the raw parent MAC when the parent node is not tracked", () => {
+    const shed = byEntity.get("device_tracker.virtual_re330_shed");
+    expect(shed?.apName).toBe("02-56-4D-01-00-99");
+    expect(shed?.apIsMainNode).toBe(false);
+  });
+
+  it("keeps the client ap_name mapping unchanged", () => {
+    expect(byEntity.get("device_tracker.vm_phone_hall")?.apName).toBe("Virtual RE330 Hall");
+    expect(byEntity.get("device_tracker.vm_phone_hall")?.apIsMainNode).toBe(false);
+    expect(byEntity.get("device_tracker.vm_laptop_main")?.apName).toBe("Virtual Archer BE550");
+    expect(byEntity.get("device_tracker.vm_laptop_main")?.apIsMainNode).toBe(true);
+    expect(byEntity.get("device_tracker.vm_phone_hall")?.signalValue).toBe(-55);
+  });
+
+  it("maps the backhaul as wired or wifi and the bar level without inventing dBm", () => {
+    const hall = byEntity.get("device_tracker.virtual_re330_hall");
+    expect(hall?.connectionType).toBe("wifi");
+    expect(hall?.meshSignalLevel).toBe(3);
+    expect(hall?.signalValue).toBeNull();
+    expect(hall?.signal).toBe("—");
+    const garage = byEntity.get("device_tracker.virtual_re330_garage");
+    expect(garage?.connectionType).toBe("wired");
+    expect(garage?.connection.toLowerCase()).toBe("wired");
+    expect(garage?.meshSignalLevel).toBeNull();
+    expect(byEntity.get("device_tracker.virtual_archer_be550")?.connectionType).toBe("unknown");
+  });
+
+  it("fills role, model and client count for node rows", () => {
+    const main = byEntity.get("device_tracker.virtual_archer_be550");
+    expect(main?.deviceType).toBe("Main Router");
+    expect(main?.deviceModel).toBe("Archer BE550");
+    expect(main?.clientCount).toBe("34");
+    expect(main?.clientCountValue).toBe(34);
+    const hall = byEntity.get("device_tracker.virtual_re330_hall");
+    expect(hall?.deviceType).toBe("Satellite");
+    expect(hall?.deviceModel).toBe("RE330");
+    expect(byEntity.get("device_tracker.vm_phone_hall")?.deviceType).toBe("—");
+    expect(byEntity.get("device_tracker.vm_phone_hall")?.clientCount).toBe("—");
+  });
+
+  it("reports a dropped node as offline", () => {
+    const attic = byEntity.get("device_tracker.virtual_re330_attic");
+    expect(attic?.isOnline).toBe(false);
+    expect(attic?.apName).toBe("Virtual Archer BE550");
+  });
+
+  it("is a no-op for rows without mesh parents", () => {
+    const clientOnly = rows.filter((row) => row.meshRole === null);
+    expect(applyMeshParentNames(clientOnly)).toBe(clientOnly);
   });
 });

@@ -206,3 +206,55 @@ describe("omada_open_api header actions", () => {
     ).toBeNull();
   });
 });
+
+describe("upstream additions since 0.6.0", () => {
+  it("puts tplink_router MLO switches into their own opt-in group", () => {
+    expect(
+      matchAction(
+        "switch",
+        "switch.tp_link_router_wifi_mlo_2_4g",
+        "TP-Link Router WIFI MLO 2.4G",
+        "tplink_router",
+      ),
+    ).toEqual({ kind: "host", group: "mlo", band: "2g", requiresHold: true });
+    expect(
+      matchAction("switch", "switch.tp_link_router_wifi_mlo_6g", "TP-Link Router WIFI MLO 6G", "tplink_router"),
+    ).toEqual({ kind: "host", group: "mlo", band: "6g", requiresHold: true });
+    expect(DEFAULT_HEADER_ACTION_GROUPS).not.toContain("mlo");
+    expect(HEADER_ACTION_GROUPS).toContain("mlo");
+  });
+
+  it("keeps the plain WiFi band switches in the wifi group", () => {
+    expect(
+      matchAction("switch", "switch.tp_link_router_wifi_2_4g", "TP-Link Router WIFI 2.4G", "tplink_router"),
+    ).toEqual({ kind: "host", group: "wifi", band: "2g", requiresHold: true });
+  });
+
+  it("matches the tplink_router E-WAN switch into the wan group", () => {
+    expect(
+      matchAction(
+        "switch",
+        "switch.tp_link_router_e_wan_connect",
+        "TP-Link Router E-WAN connect",
+        "tplink_router",
+      ),
+    ).toEqual({ kind: "router", group: "wan", requiresHold: true });
+    expect(
+      matchAction("switch", "switch.tp_link_router_e_wan_connect", "TP-Link Router E-WAN connect", "tplink_deco"),
+    ).toBeNull();
+  });
+
+  it("puts the tplink_deco Refresh Deco status button into the scanning group without hold", () => {
+    expect(
+      matchAction(
+        "button",
+        "button.living_room_deco_refresh_deco_status",
+        "Living Room Deco Refresh Deco status",
+        "tplink_deco",
+      ),
+    ).toEqual({ kind: "router", group: "scanning", requiresHold: false });
+    expect(
+      matchAction("button", "button.something_refresh_deco_status", "Refresh Deco status", "omada"),
+    ).toBeNull();
+  });
+});

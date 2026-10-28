@@ -703,6 +703,20 @@ export const cardStyles = css`
     border-radius: 50%;
   }
 
+  .signal-level {
+    display: inline-flex;
+    align-items: flex-end;
+    gap: 2px;
+    height: 14px;
+  }
+
+  .signal-level-bar {
+    display: block;
+    width: 4px;
+    border-radius: 1px;
+    background: var(--primary-color);
+  }
+
   .signal-strength-bar {
     display: inline-block;
     width: 44px;

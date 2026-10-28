@@ -1,0 +1,152 @@
+{
+  "entryId": "entry-easymesh",
+  "states": {
+    "device_tracker.virtual_archer_be550": {
+      "entity_id": "device_tracker.virtual_archer_be550",
+      "state": "home",
+      "attributes": {
+        "source_type": "router",
+        "ip": "192.168.0.1",
+        "mac": "02-56-4D-01-00-01",
+        "host_name": "Virtual Archer BE550",
+        "device_type": "WirelessRouter",
+        "device_model": "Archer BE550",
+        "connection_type": null,
+        "status": "connected",
+        "role": "main_router",
+        "is_main_router": true,
+        "client_num": 34,
+        "location": "Living Room",
+        "vendor": "TP-Link",
+        "friendly_name": "Virtual Archer BE550"
+      }
+    },
+    "device_tracker.virtual_re330_hall": {
+      "entity_id": "device_tracker.virtual_re330_hall",
+      "state": "home",
+      "attributes": {
+        "source_type": "router",
+        "ip": "192.168.0.2",
+        "mac": "02-56-4D-01-00-02",
+        "host_name": "Virtual RE330 Hall",
+        "device_type": "RangeExtender",
+        "device_model": "RE330",
+        "connection_type": "wireless",
+        "status": "connected",
+        "role": "satellite_router",
+        "is_main_router": false,
+        "parent_mac": "02-56-4D-01-00-01",
+        "client_num": 5,
+        "signal_level": 3,
+        "support_reboot": true,
+        "mesh_type": "easymesh",
+        "vendor": "TP-Link",
+        "friendly_name": "Virtual RE330 Hall"
+      }
+    },
+    "device_tracker.virtual_re330_garage": {
+      "entity_id": "device_tracker.virtual_re330_garage",
+      "state": "home",
+      "attributes": {
+        "source_type": "router",
+        "ip": "192.168.0.3",
+        "mac": "02-56-4D-01-00-03",
+        "host_name": "Virtual RE330 Garage",
+        "device_type": "RangeExtender",
+        "device_model": "RE330",
+        "connection_type": "wire",
+        "status": "connected",
+        "role": "satellite_router",
+        "is_main_router": false,
+        "parent_mac": "02-56-4D-01-00-02",
+        "client_num": 2,
+        "support_reboot": true,
+        "mesh_type": "easymesh",
+        "vendor": "TP-Link",
+        "friendly_name": "Virtual RE330 Garage"
+      }
+    },
+    "device_tracker.virtual_re330_attic": {
+      "entity_id": "device_tracker.virtual_re330_attic",
+      "state": "not_home",
+      "attributes": {
+        "source_type": "router",
+        "mac": "02-56-4D-01-00-04",
+        "host_name": "Virtual RE330 Attic",
+        "device_type": "RangeExtender",
+        "device_model": "RE330",
+        "connection_type": "wireless",
+        "status": "disconnected",
+        "role": "satellite_router",
+        "is_main_router": false,
+        "parent_mac": "02-56-4D-01-00-01",
+        "client_num": 0,
+        "signal_level": 1,
+        "mesh_type": "easymesh",
+        "vendor": "TP-Link",
+        "friendly_name": "Virtual RE330 Attic"
+      }
+    },
+    "device_tracker.virtual_re330_shed": {
+      "entity_id": "device_tracker.virtual_re330_shed",
+      "state": "home",
+      "attributes": {
+        "source_type": "router",
+        "ip": "192.168.0.5",
+        "mac": "02-56-4D-01-00-05",
+        "host_name": "Virtual RE330 Shed",
+        "device_type": "RangeExtender",
+        "device_model": "RE330",
+        "connection_type": "wireless",
+        "status": "connected",
+        "role": "satellite_router",
+        "is_main_router": false,
+        "parent_mac": "02-56-4D-01-00-99",
+        "client_num": 1,
+        "signal_level": 2,
+        "mesh_type": "easymesh",
+        "vendor": "TP-Link",
+        "friendly_name": "Virtual RE330 Shed"
+      }
+    },
+    "device_tracker.vm_phone_hall": {
+      "entity_id": "device_tracker.vm_phone_hall",
+      "state": "home",
+      "attributes": {
+        "source_type": "router",
+        "ip": "192.168.0.110",
+        "mac": "02-56-4D-01-10-01",
+        "host_name": "vm-phone-hall",
+        "connection": "host",
+        "band": "5G",
+        "signal": -55,
+        "ap_name": "Virtual RE330 Hall",
+        "friendly_name": "vm-phone-hall"
+      }
+    },
+    "device_tracker.vm_laptop_main": {
+      "entity_id": "device_tracker.vm_laptop_main",
+      "state": "home",
+      "attributes": {
+        "source_type": "router",
+        "ip": "192.168.0.111",
+        "mac": "02-56-4D-01-10-02",
+        "host_name": "vm-laptop-main",
+        "connection": "host",
+        "band": "2G",
+        "signal": -48,
+        "ap_name": "*Virtual Archer BE550",
+        "friendly_name": "vm-laptop-main"
+      }
+    }
+  },
+  "entityRegistry": [
+    { "entity_id": "device_tracker.virtual_archer_be550", "platform": "tplink_router", "config_entry_id": "entry-easymesh", "device_id": "dev-router" },
+    { "entity_id": "device_tracker.virtual_re330_hall", "platform": "tplink_router", "config_entry_id": "entry-easymesh", "device_id": "dev-hall" },
+    { "entity_id": "device_tracker.virtual_re330_garage", "platform": "tplink_router", "config_entry_id": "entry-easymesh", "device_id": "dev-garage" },
+    { "entity_id": "device_tracker.virtual_re330_attic", "platform": "tplink_router", "config_entry_id": "entry-easymesh", "device_id": "dev-attic" },
+    { "entity_id": "device_tracker.virtual_re330_shed", "platform": "tplink_router", "config_entry_id": "entry-easymesh", "device_id": "dev-shed" },
+    { "entity_id": "device_tracker.vm_phone_hall", "platform": "tplink_router", "config_entry_id": "entry-easymesh" },
+    { "entity_id": "device_tracker.vm_laptop_main", "platform": "tplink_router", "config_entry_id": "entry-easymesh" }
+  ]
+}

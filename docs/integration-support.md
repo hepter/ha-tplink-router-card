@@ -8,7 +8,7 @@
 - `omada_open_api` (`ha-omada-open-api`, HACS)
 - `tplink_omada` (Home Assistant Core)
 
-Last upstream sync: 2026-09-18 (`tplink_router` v2.38.0, `ha-tplink-deco` v3.10.1, `ha-omada` 0.10.0, `ha-omada-open-api` 1.10.1, core `tplink_omada` with `tplink-omada-api` 1.5.9).
+Last upstream sync: 2026-10-28 (`tplink_router` v2.44.0 with `tplinkrouterc6u` 5.37.0, `ha-tplink-deco` v3.12.0, `ha-omada` 0.10.0 plus the unreleased main branch, `ha-omada-open-api` 1.11.1 and the 1.12.0 betas, core `tplink_omada` with `tplink-omada-client` 1.5.13, Home Assistant 2026.10.4 and the 2026.11 `device_tracker` changes).
 
 ## Current card support
 
@@ -21,6 +21,9 @@ Last upstream sync: 2026-09-18 (`tplink_router` v2.38.0, `ha-tplink-deco` v3.10.
   - `ap_name` is published since integration v2.33.0; clients on the main node carry a `*` prefix that the card converts into a badge.
   - Integration option `support_tracker=false` (v2.36.0+) removes all trackers; the table is empty by design.
   - Trackers are `RestoreEntity` since v2.28.1: after a Home Assistant restart the first render may show restored attributes until the next poll.
+  - EasyMesh node trackers (v2.41.0+, `TPLinkMeshTracker`): one tracker per node in the same config entry, the main router included. They are recognised by the boolean `is_main_router` attribute (client trackers never carry it). `parent_mac` is resolved to the parent node row's name for `apName` (`applyMeshParentNames` in `src/adapters/tplink.ts`, badge when the parent is the main router, raw MAC when the parent is not tracked); `signal_level` is a bar level (1-3 on BE, up to 5 on AX, missing on some AX firmware) shown as bars in `signal` while `signalValue` stays empty, so dBm colours and sorting are unaffected; `connection_type: wire` maps to `Wired`; `role` feeds `deviceType` (`Main Router` / `Satellite`), `device_model` feeds `deviceModel`, `client_num` feeds `clients` (these three columns are opt-in on `tplink_router`). Per-node backhaul dBm is not exposed for EasyMesh (library issue TP-Link-Archer-C6U#240 is open); Deco nodes managed by `tplink_router` publish it as `Backhaul signal` sensors on the node device.
+  - v2.41.0 `WIFI MLO 2.4G/5G/6G` switches go to the opt-in `mlo` header group (the c6u client family rejects toggling them); v2.39.0 `E-WAN connect` goes to the opt-in `wan` group.
+  - Client `band` can be `MLO` and `connection` can be `unknown` with tplinkrouterc6u 5.33+; both render as a band-less WiFi / unknown row.
 
 ### tplink_deco
 - Support level: **High**
@@ -32,6 +35,9 @@ Last upstream sync: 2026-09-18 (`tplink_router` v2.38.0, `ha-tplink-deco` v3.10.
   - Node trackers may publish `connection_type` as a list; the card joins it before mapping.
   - `internet_online` can be `null` (node not reachable); shown as `Unknown`.
   - Backhaul, CPU and memory sensors exist upstream but are disabled by default and are not joined into rows.
+  - v3.12.0 `Refresh Deco status` button goes to the `scanning` header group without hold; with the integration option `device_list_interval: 0` Deco status, `internet_online`, `connection_type` and new nodes only refresh on start-up or through that button.
+  - v3.10.6 adds `host_name` (same value as `ui_device_name`) and `backhaul_bssid_band2_4` / `backhaul_bssid_band5` on nodes; node `signal_band*` values are levels, not dBm, and are not mapped.
+  - Home Assistant 2026.11 removes `RestoreStateData.last_states`; ha-tplink-deco 3.10.4 and older fail to set up there (fixed in 3.10.5).
 
 ### omada (HACS `ha-omada`)
 - Support level: **High**
@@ -48,7 +54,8 @@ Last upstream sync: 2026-09-18 (`tplink_router` v2.38.0, `ha-tplink-deco` v3.10.
 - Notes:
   - Per-client TX/RX link-rate values are shown only when explicit link-rate entities are exposed by the integration (the current integration does not publish them).
   - Falsy attributes (`wireless: false`, `guest: false`, `status: 0`) are not published by the integration; the card treats their absence as `false`/disconnected.
-  - Omada Controller 6.x: the integration fetches at most 100 clients per poll and the Reconnect button is broken until upstream PR #164 is merged.
+  - The controller device has no tracker; a device group with a WLAN optimization, RF planning or Reconnect All Clients button is shown as a `Controller` row.
+  - Omada Controller 6.x: the integration fetches at most 100 clients per poll. The Reconnect button fails on v6 in 0.10.0; upstream PR #164 (merged, not released) routes the `/cmd/` calls to the classic API.
 
 ### omada_open_api (HACS `ha-omada-open-api`)
 - Support level: **High**
@@ -67,6 +74,8 @@ Last upstream sync: 2026-09-18 (`tplink_router` v2.38.0, `ha-tplink-deco` v3.10.
   - The site pseudo device (model `Omada Site`) carries only site-wide entities and is never rendered as a row.
   - The integration creates client entities only for the clients selected in its config flow (first 200 clients are offered).
   - `channel`, `wifi_mode`, `last_seen`, packet counters, negotiated link rates and VLAN are parsed by the integration but not exposed as attributes or entities, so the corresponding columns (`channel`, `wifiMode`, `lastSeen`, `packetsSent`, `packetsReceived`, `tx`, `rx`) are not offered.
+  - 1.12.0 (beta) opt-in auto-discovered trackers (`BaseScannerEntity`, presence only) publish `rssi_dbm`, `snr_db` and `signal_strength_percent` attributes instead of sensors; the adapter reads them as `signal`, `snr` and `signalStrength`. They carry no `connected_ap`, so `connectedTo` falls back to the client device's `via_device_id` parent (never the `Omada Site` device). Their default "exclude private MACs" filter hides every virtual lab client (`02:56:4D` is locally administered).
+  - 1.12.0 (main) removes `_attr_icon` from switches and buttons; the card falls back to role / name based icons (`src/utils/action-icon.ts`).
 
 ### tplink_omada (Home Assistant Core)
 - Support level: **Basic**
@@ -81,6 +90,8 @@ Last upstream sync: 2026-09-18 (`tplink_router` v2.38.0, `ha-tplink-deco` v3.10.
   - Core publishes no `ap_name`, RSSI, link rate, traffic or power-save attributes and its `ScannerEntity.state_attributes` is final upstream, so these columns stay hidden by default.
   - `ip` and `host_name` disappear while a client is disconnected.
   - Core allows several config entries for the same controller (one per site); pick the site entry in the card editor.
+  - Home Assistant 2026.10 adds a controller device (`<model> - <name>`, `Device status` sensor, `Firmware` update entity); the adapter shows it as a `Controller` row (`OC*` model, or exactly `Controller` / `Omada Controller`) instead of a wired client. The match is exact because `omada_open_api` stores the client category as the model of a client device. Setup reads `macAddress`, `controllerVersion` and `upTime` from `maintenance/controllerStatus`.
+  - Home Assistant 2026.11 (core #188883) creates a device for every scanner tracker and creates new trackers disabled; rows keep their grouping, the name now opens that device page.
 
 ## Column strategy
 
@@ -90,6 +101,7 @@ Last upstream sync: 2026-09-18 (`tplink_router` v2.38.0, `ha-tplink-deco` v3.10.
 - Header actions are grouped (`src/utils/action-matcher.ts` `HeaderActionGroup`); `header_action_groups` selects the rendered groups, default `wifi, guest, reboot, scanning, controller`. An empty list keeps the defaults, `none` hides every group, `all` shows every group.
 - Rows come from device groups; a group without a device and without a tracker (site-level switches and buttons) is never a row.
 - Missing fields are rendered as `—`.
+- Home Assistant 2026.11+ creates `device_tracker` entities disabled unless the integration opts in. A client group whose tracker is disabled is not rendered (its switches and sensors would otherwise guess the client state). Access points, switches, gateways and controllers (a firmware `update` entity or a known model prefix) keep their sensor-based row. The card shows the number of trackers with `disabled_by: integration` in the selected entry.
 - Sorting: `ip` orders IPv4 by octet value and IPv6 after IPv4 (`src/utils/ip-sort.ts`); `—` cells (offline rows, wired rows for the radio columns, `0.0.0.0`) sort as empty and stay at the end in both directions.
 - Adapters emit stable English labels for connection, device type, device status and power save; the card translates the known ones (`src/i18n/index.ts` `localizeLabel`).
 - Integration metadata columns (`deviceType`, `deviceModel`, `deviceFirmware`, `deviceStatus`) are enabled for Omada domains and Deco domain.

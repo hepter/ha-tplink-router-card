@@ -1,9 +1,11 @@
 from __future__ import annotations
 
+import json
 import os
 import secrets
 import time
 from typing import TYPE_CHECKING, Any
+from urllib.parse import parse_qsl
 
 from fastapi import FastAPI, Request
 from fastapi.responses import JSONResponse
@@ -52,6 +54,18 @@ def _as_int(value: Any, default: int) -> int:
         return int(value)
     except (TypeError, ValueError):
         return default
+
+
+async def _token_request_body(request: Request) -> dict[str, Any]:
+    body = await request.body()
+    content_type = request.headers.get("content-type", "").split(";", 1)[0].strip().lower()
+    if content_type == "application/x-www-form-urlencoded":
+        return dict(parse_qsl(body.decode("utf-8", "replace")))
+    try:
+        payload = json.loads(body)
+    except ValueError:
+        return {}
+    return payload if isinstance(payload, dict) else {}
 
 
 class OmadaOpenApiMock:
@@ -796,10 +810,7 @@ class OmadaOpenApiMock:
         @app.post("/openapi/authorize/token")
         async def authorize_token(request: Request):
             grant_type = request.query_params.get("grant_type", "")
-            try:
-                payload = await request.json()
-            except Exception:
-                payload = {}
+            payload = await _token_request_body(request)
 
             if payload.get("client_id") != self.client_id or payload.get("client_secret") != self.client_secret:
                 return self._fail(ERROR_AUTH_FAILED, "Invalid client credentials")

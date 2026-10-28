@@ -71,6 +71,7 @@ class OmadaControllerMock:
         self.version_tuple = _parse_version(self.version)
         # ha-omada switches to /openapi/v2 client listing at 6.0.0, core tplink_omada at 6.2.0.
         self.supports_openapi_v2 = self.version_tuple >= (6, 0, 0, 0)
+        self.controller_update_available = os.getenv("VMODEM_OMADA_CONTROLLER_UPDATE", "").strip() == "1"
 
         self.devices = copy.deepcopy(self.fixture.get("devices", []))
         self.clients = copy.deepcopy(self.fixture.get("clients", []))
@@ -507,6 +508,28 @@ class OmadaControllerMock:
             "fwReleaseLog": "Virtual firmware changelog for the emulated Omada controller",
         }
 
+    def _controller_status(self) -> dict[str, Any]:
+        return {
+            "name": self.controller["name"],
+            "macAddress": self.controller["mac"],
+            "model": self.controller["model"],
+            "controllerVersion": self.version,
+            "upTime": int(time.time() - self._started_at),
+        }
+
+    def _controller_update_info(self) -> dict[str, Any]:
+        major, minor, patch, _ = self.version_tuple
+        latest = f"{major}.{minor}.{patch + 1}" if self.controller_update_available else self.version
+        return {
+            "hardware": None,
+            "software": {
+                "upgrade": self.controller_update_available,
+                "currentVersion": self.version,
+                "latestVersion": latest,
+                "releaseLog": f"Virtual Omada Controller {latest} release notes",
+            },
+        }
+
     def _build_topology(self) -> dict[str, Any]:
         devices = {_normalize_mac(str(d.get("mac", ""))): d for d in self._runtime_devices()}
 
@@ -631,7 +654,13 @@ class OmadaControllerMock:
         async def controller_status(controller_id: str):
             if not self._matches_controller(controller_id):
                 return self._not_found("controller not found")
-            return self._ok({"name": self.controller["name"]})
+            return self._ok(self._controller_status())
+
+        @app.get("/{controller_id}/api/v2/controller/notification/updateInfo")
+        async def controller_update_info(controller_id: str):
+            if not self._matches_controller(controller_id):
+                return self._not_found("controller not found")
+            return self._ok(self._controller_update_info())
 
         @app.get("/{controller_id}/api/v2/maintenance/uiInterface")
         async def ui_interface(controller_id: str):
@@ -654,6 +683,10 @@ class OmadaControllerMock:
         @app.get("/api/v2/maintenance/controllerStatus")
         async def controller_status_alias():
             return await controller_status(self.controller["id"])
+
+        @app.get("/api/v2/controller/notification/updateInfo")
+        async def controller_update_info_alias():
+            return await controller_update_info(self.controller["id"])
 
         @app.get("/api/v2/maintenance/uiInterface")
         async def ui_interface_alias():

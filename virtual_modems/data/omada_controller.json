@@ -4,7 +4,9 @@
     "id": "oc-virtual-001",
     "site_id": "site-main",
     "site_name": "Main Campus",
-    "name": "Virtual Omada Controller: Main Campus"
+    "name": "Virtual Omada Controller: Main Campus",
+    "mac": "02-56-4D-03-00-FF",
+    "model": "OC300"
   },
   "open_api": {
     "site": {
@@ -4275,7 +4277,7 @@
     {
       "mac": "02:56:4D:03:10:32",
       "name": "vm-wifi-050",
-      "hostName": "vm-wifi-050",
+      "hostName": "vm-host-050",
       "deviceType": "MacBook",
       "deviceCategory": "Computer",
       "osName": "macOS 15",

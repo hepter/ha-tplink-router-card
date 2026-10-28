@@ -14,7 +14,7 @@ Behavior-based contract fixtures used by adapter tests.
   - `action_device_dropdown_regression.json`
 
 ## Structure
-- `fixtures/tplink_router/`: payloads for `tplink_router` adapter contracts.
+- `fixtures/tplink_router/`: payloads for `tplink_router` adapter contracts (`easymesh_node_trackers.json` mirrors the EasyMesh node trackers of `tplink_router` 2.41+).
 - `fixtures/tplink_deco/`: payloads for `tplink_deco` adapter contracts.
 - `fixtures/omada/`: payloads for Omada adapter contracts (`omada`, `tplink_omada`, `omada_open_api`; `omada_open_api_entry.json` mirrors the entity, attribute and device registry shapes of `ha-omada-open-api` 1.10.x).
 
@@ -53,6 +53,36 @@ Behavior-based contract fixtures used by adapter tests.
   ]
 }
 ```
+
+`tplink_router` 2.41+ EasyMesh node tracker (satellite):
+
+```json
+{
+  "entity_id": "device_tracker.node_name",
+  "state": "home",
+  "attributes": {
+    "source_type": "router",
+    "ip": "192.168.0.2",
+    "mac": "AA-BB-CC-DD-EE-02",
+    "host_name": "RE330 Hall",
+    "device_type": "RangeExtender",
+    "device_model": "RE330",
+    "connection_type": "wireless|wire|null",
+    "status": "connected|disconnected",
+    "role": "main_router|satellite_router",
+    "is_main_router": false,
+    "parent_mac": "AA-BB-CC-DD-EE-01",
+    "client_num": 5,
+    "signal_level": 3,
+    "mesh_type": "easymesh",
+    "vendor": "TP-Link"
+  }
+}
+```
+
+`is_main_router` is published only by node trackers, never by clients. The main router has no `parent_mac` and
+no `signal_level`; `signal_level` is a firmware-dependent bar level (1–3 on BE, up to 5 on AX, no dBm) and older AX
+firmware omits it.
 
 ## TP-Link Deco minimum shape
 

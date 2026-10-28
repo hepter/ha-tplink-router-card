@@ -17,6 +17,8 @@ import {
 import { selectDefaultColumnKeys } from "../utils/default-columns";
 import { buildColumnMaxWidthStyle } from "../utils/column-style";
 import { collapseDoubledDeviceName } from "../utils/entity-name";
+import { resolveActionIcon } from "../utils/action-icon";
+import { countIntegrationDisabledTrackers } from "../utils/disabled-trackers";
 import { ipSortKey } from "../utils/ip-sort";
 import { buildServiceRowActions } from "../utils/service-row-actions";
 import {
@@ -26,6 +28,7 @@ import {
 import { formatSpeed } from "../utils/format";
 import { buildOmadaRows, isLikelyOmadaTrackerByAttrs } from "../adapters/omada";
 import {
+  applyMeshParentNames,
   detectLinkRateUnit,
   mapTrackerStateToRow,
   normalizeMac,
@@ -757,6 +760,22 @@ export class TplinkRouterCard extends LitElement {
             entity_ids: requestedEntityIds,
           });
           this._mergeEntityRegistryFromResponse(requestedEntityIds, response);
+        } catch {
+          // Best-effort incremental refresh
+        }
+      }
+      const knownDeviceIds = new Set(this._deviceRegistry.map((device) => device.id));
+      const hasUnknownDevice = this._entityRegistry.some(
+        (entry) =>
+          entry.config_entry_id === entryId &&
+          typeof entry.device_id === "string" &&
+          !knownDeviceIds.has(entry.device_id),
+      );
+      if (hasUnknownDevice) {
+        try {
+          this._deviceRegistry = await this.hass.callWS<DeviceRegistryEntry[]>({
+            type: "config/device_registry/list",
+          });
         } catch {
           // Best-effort incremental refresh
         }
@@ -1531,6 +1550,7 @@ export class TplinkRouterCard extends LitElement {
         {
           assumeWirelessClients: entryDomain === "tplink_omada",
           locale: this.hass.locale?.language ?? this.hass.language,
+          connectedToFromViaDevice: entryDomain === "omada_open_api",
         },
       );
     } else {
@@ -1548,15 +1568,17 @@ export class TplinkRouterCard extends LitElement {
           .map((item) => [item.entity_id, item.device_id as string] as const),
       );
 
-      rows = entities.map((state) =>
-        ({
-          ...mapTrackerStateToRow(
-            state,
-            this._config?.speed_unit ?? "MBps",
-            linkRateUnit,
-          ),
-          deviceId: trackerDeviceIdByEntity.get(state.entity_id),
-        }) as RowData,
+      rows = applyMeshParentNames(
+        entities.map((state) =>
+          ({
+            ...mapTrackerStateToRow(
+              state,
+              this._config?.speed_unit ?? "MBps",
+              linkRateUnit,
+            ),
+            deviceId: trackerDeviceIdByEntity.get(state.entity_id),
+          }) as RowData,
+        ),
       );
     }
 
@@ -1623,11 +1645,12 @@ export class TplinkRouterCard extends LitElement {
         const role = resolveActionRole(roleContext);
         const inverted = role === "block" && isInvertedBlockSwitch(roleContext);
 
-        const icon = (() => {
-          const attrIcon = (state.attributes as Record<string, unknown>).icon;
-          if (typeof attrIcon === "string" && attrIcon.trim().length > 0) return attrIcon;
-          return domain === "button" ? "mdi:gesture-tap-button" : "mdi:toggle-switch";
-        })();
+        const icon = resolveActionIcon(
+          (state.attributes as Record<string, unknown>).icon,
+          domain as "switch" | "button",
+          role,
+          text,
+        );
         const isOn = inverted ? state.state === "off" : state.state === "on";
         const available =
           domain === "button" ? state.state !== "unavailable" : state.state !== "unavailable";
@@ -2292,12 +2315,16 @@ export class TplinkRouterCard extends LitElement {
       !this._registryFailed &&
       entryRegistryEntries.length > 0 &&
       !entryRegistryEntries.some((entry) => entry.entity_id.startsWith("device_tracker."));
+    const disabledTrackerCount =
+      this._loading || this._registryFailed
+        ? 0
+        : countIntegrationDisabledTrackers(entryRegistryEntries);
     const omadaClientRowCount =
       entryDomain === "omada"
         ? rows.filter(
           (row) =>
             row.entity_id.startsWith("device_tracker.") &&
-            !["Access Point", "Gateway", "Switch"].includes(row.deviceType ?? ""),
+            !["Access Point", "Gateway", "Switch", "Controller"].includes(row.deviceType ?? ""),
         ).length
         : 0;
     const showOmadaClientLimitNotice = omadaClientRowCount === 100;
@@ -2557,6 +2584,7 @@ export class TplinkRouterCard extends LitElement {
     const defaultColumnKeys = selectDefaultColumnKeys(
       columns.map((col) => col.key),
       allowedColumns,
+      entryDomain,
     );
     const selectedColumns =
       this._config?.columns && this._config.columns.length > 0
@@ -3112,6 +3140,11 @@ export class TplinkRouterCard extends LitElement {
         ${showOmadaClientLimitNotice
         ? html`<div class="notice">${t("card.omadaClientLimitNotice")}</div>`
         : nothing}
+        ${disabledTrackerCount > 0
+        ? html`<div class="notice">
+            ${t("card.disabledTrackersNotice", { count: disabledTrackerCount })}
+          </div>`
+        : nothing}
         ${this._error
         ? html`<div class="empty">${this._error}</div>`
         : !entryId
@@ -3399,7 +3432,22 @@ export class TplinkRouterCard extends LitElement {
                   })(),
                   signal: isOffline || row.connectionType === "wired"
                     ? "—"
-                    : html`
+                    : row.signalValue === null && row.meshSignalLevel !== null
+                      ? html`
+                          <span
+                            class="signal-level"
+                            title=${t("card.meshSignalLevel", { level: row.meshSignalLevel })}
+                          >
+                            ${Array.from(
+                              { length: Math.max(0, Math.min(5, Math.round(row.meshSignalLevel))) },
+                              (_, index) => html`<span
+                                class="signal-level-bar"
+                                style=${`height:${44 + index * 14}%`}
+                              ></span>`,
+                            )}
+                          </span>
+                        `
+                      : html`
                                     <span class="signal">
                                       <span class="signal-dot" style=${`background:${row.signalColor}`}></span>
                                       ${row.signal}

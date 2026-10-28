@@ -424,6 +424,13 @@ describe("omada adapter contract fixtures", () => {
     expect(wifi?.snr).toBe("—");
     expect(wifi?.powerSave).toBe("—");
     expect(wifi?.deviceId).toBe("dev-client-wifi");
+
+    const controller = rows.find((row) => row.name === "Omada Controller");
+    expect(controller?.deviceType).toBe("Controller");
+    expect(controller?.connection).toBe("Controller");
+    expect(controller?.connectionType).toBe("unknown");
+    expect(controller?.band).toBe("—");
+    expect(controller?.isOnline).toBe(true);
   });
 });
 
@@ -596,5 +603,285 @@ describe("omada_open_api adapter contract fixture", () => {
     const ids = trackers.map((item) => item.entity_id);
     expect(ids).toContain("device_tracker.vm_phone_001");
     expect(ids).toContain("device_tracker.virtual_eap670_hall");
+  });
+});
+
+describe("omada shapes introduced after 0.6.0", () => {
+  const entryId = "entry-omada-next";
+  const reg = (entity_id: string, device_id?: string, extra: Partial<EntityRegistryEntry> = {}) => ({
+    entity_id,
+    platform: "omada_open_api",
+    config_entry_id: entryId,
+    ...(device_id ? { device_id } : {}),
+    ...extra,
+  });
+  const st = (entity_id: string, state: string, attributes: Record<string, unknown>): HassEntity => ({
+    entity_id,
+    state,
+    attributes,
+  });
+
+  it("skips a client whose tracker is disabled instead of guessing its state from the switch", () => {
+    const states = {
+      "switch.vm_phone_network_access": st("switch.vm_phone_network_access", "on", {
+        friendly_name: "vm-phone Network access",
+      }),
+      "sensor.vm_phone_rssi": st("sensor.vm_phone_rssi", "-50", {
+        unit_of_measurement: "dBm",
+        friendly_name: "vm-phone RSSI",
+      }),
+    };
+    const rows = buildOmadaRows(
+      states,
+      [
+        reg("device_tracker.vm_phone", "dev-phone", { disabled_by: "integration" }),
+        reg("switch.vm_phone_network_access", "dev-phone"),
+        reg("sensor.vm_phone_rssi", "dev-phone"),
+      ],
+      [{ id: "dev-phone", name: "vm-phone" }],
+      entryId,
+      false,
+      "MBps",
+    );
+    expect(rows).toEqual([]);
+  });
+
+  it("keeps an access point row from its sensors when its tracker is disabled", () => {
+    const states = {
+      "sensor.eap670_hall_clients": st("sensor.eap670_hall_clients", "12", {
+        friendly_name: "EAP670 Hall Clients",
+      }),
+      "button.eap670_hall_reboot": st("button.eap670_hall_reboot", "unknown", {
+        friendly_name: "EAP670 Hall Reboot",
+      }),
+      "update.eap670_hall_firmware": st("update.eap670_hall_firmware", "off", {
+        installed_version: "1.0.5",
+        latest_version: "1.0.5",
+        friendly_name: "EAP670 Hall Firmware",
+      }),
+    };
+    const ap = { id: "dev-ap", name: "EAP670 Hall", model: "EAP670" };
+    const entries = [
+      reg("device_tracker.eap670_hall", "dev-ap", { disabled_by: "integration" }),
+      reg("sensor.eap670_hall_clients", "dev-ap"),
+      reg("button.eap670_hall_reboot", "dev-ap"),
+      reg("update.eap670_hall_firmware", "dev-ap"),
+    ];
+    const rows = buildOmadaRows(states, entries, [ap], entryId, false, "MBps");
+    expect(rows).toHaveLength(1);
+    expect(rows[0].name).toBe("EAP670 Hall");
+    expect(rows[0].connection).toBe("Access Point");
+
+    const unknownModel = buildOmadaRows(
+      states,
+      entries,
+      [{ ...ap, model: "Omada Mesh Node" }],
+      entryId,
+      false,
+      "MBps",
+    );
+    expect(unknownModel).toHaveLength(1);
+  });
+
+  it("does not take a client whose category contains 'controller' for an Omada controller", () => {
+    const states = {
+      "device_tracker.vm_gamepad": st("device_tracker.vm_gamepad", "home", {
+        source_type: "router",
+        mac: "02:56:4D:03:00:77",
+        ip: "192.168.50.77",
+        connection_type: "wireless",
+      }),
+    };
+    const rows = buildOmadaRows(
+      states,
+      [reg("device_tracker.vm_gamepad", "dev-gamepad")],
+      [{ id: "dev-gamepad", name: "vm-gamepad", model: "Game Controller" }],
+      entryId,
+      false,
+      "MBps",
+    );
+    expect(rows).toHaveLength(1);
+    expect(rows[0].deviceType).not.toBe("Controller");
+  });
+
+  it("lists the core tplink_omada software controller (model fallback 'Controller') as a Controller row", () => {
+    const rows = buildOmadaRows(
+      {
+        "sensor.controller_main_campus_device_status": st(
+          "sensor.controller_main_campus_device_status",
+          "connected",
+          { device_class: "enum", friendly_name: "Controller - Main Campus Device status" },
+        ),
+      },
+      [
+        {
+          entity_id: "sensor.controller_main_campus_device_status",
+          platform: "tplink_omada",
+          config_entry_id: entryId,
+          device_id: "dev-soft",
+        },
+      ],
+      [{ id: "dev-soft", name: "Controller - Main Campus", model: "Controller" }],
+      entryId,
+      false,
+      "MBps",
+    );
+    expect(rows).toHaveLength(1);
+    expect(rows[0].deviceType).toBe("Controller");
+  });
+
+  it("lists the core tplink_omada controller device as a Controller row", () => {
+    const states = {
+      "sensor.oc300_main_campus_device_status": st("sensor.oc300_main_campus_device_status", "connected", {
+        device_class: "enum",
+        friendly_name: "OC300 - Main Campus Device status",
+      }),
+      "update.oc300_main_campus_firmware": st("update.oc300_main_campus_firmware", "on", {
+        installed_version: "5.15.8",
+        latest_version: "5.15.20",
+        friendly_name: "OC300 - Main Campus Firmware",
+      }),
+    };
+    const rows = buildOmadaRows(
+      states,
+      [
+        { entity_id: "sensor.oc300_main_campus_device_status", platform: "tplink_omada", config_entry_id: entryId, device_id: "dev-ctrl" },
+        { entity_id: "update.oc300_main_campus_firmware", platform: "tplink_omada", config_entry_id: entryId, device_id: "dev-ctrl" },
+      ],
+      [{ id: "dev-ctrl", name: "OC300 - Main Campus", model: "OC300", sw_version: "5.15.8" }],
+      entryId,
+      false,
+      "MBps",
+      { assumeWirelessClients: true },
+    );
+    expect(rows).toHaveLength(1);
+    expect(rows[0].deviceType).toBe("Controller");
+    expect(rows[0].connection).toBe("Controller");
+    expect(rows[0].isOnline).toBe(true);
+    expect(rows[0].deviceFirmware).toBe("5.15.8");
+    expect(rows[0].firmwareLatest).toBe("5.15.20");
+  });
+
+  it("reads the omada_open_api 1.12 auto-discovery signal attributes and the parent device", () => {
+    const tracker = st("device_tracker.vm_auto_001", "home", {
+      source_type: "router",
+      mac: "02:56:4d:03:10:30",
+      ssid: "MainNet 5G",
+      band: "5G",
+      connection_type: "wireless",
+      rssi_dbm: -61,
+      snr_db: 30,
+      signal_strength_percent: 72,
+      friendly_name: "vm-auto-001",
+    });
+    const registry = [reg("device_tracker.vm_auto_001", "dev-auto")];
+    const devices = [
+      { id: "dev-auto", name: "vm-auto-001", via_device_id: "dev-ap" },
+      { id: "dev-ap", name: "Virtual EAP670 Hall", model: "EAP670" },
+    ];
+    const withVia = buildOmadaRows(
+      { "device_tracker.vm_auto_001": tracker },
+      registry,
+      devices,
+      entryId,
+      false,
+      "MBps",
+      { connectedToFromViaDevice: true },
+    );
+    expect(withVia).toHaveLength(1);
+    expect(withVia[0].signalValue).toBe(-61);
+    expect(withVia[0].snrValue).toBe(30);
+    expect(withVia[0].signalStrengthValue).toBe(72);
+    expect(withVia[0].connectedTo).toBe("Virtual EAP670 Hall");
+    expect(withVia[0].connectionType).toBe("wifi");
+
+    const withoutVia = buildOmadaRows(
+      { "device_tracker.vm_auto_001": tracker },
+      registry,
+      devices,
+      entryId,
+      false,
+      "MBps",
+    );
+    expect(withoutVia[0].connectedTo).toBe("—");
+  });
+
+  it("never names the site pseudo device as the parent", () => {
+    const rows = buildOmadaRows(
+      {
+        "device_tracker.vm_auto_002": st("device_tracker.vm_auto_002", "home", {
+          source_type: "router",
+          mac: "02:56:4d:03:10:31",
+          connection_type: "wired",
+          friendly_name: "vm-auto-002",
+        }),
+      },
+      [reg("device_tracker.vm_auto_002", "dev-auto-2")],
+      [
+        { id: "dev-auto-2", name: "vm-auto-002", via_device_id: "dev-site" },
+        { id: "dev-site", name: "Main Campus - Site", model: "Omada Site" },
+      ],
+      entryId,
+      false,
+      "MBps",
+      { connectedToFromViaDevice: true },
+    );
+    expect(rows[0].connectedTo).toBe("—");
+  });
+});
+
+describe("ha-omada controller device row", () => {
+  const entryId = "entry-omada-ctrl";
+  const reg = (entity_id: string) => ({
+    entity_id,
+    platform: "omada",
+    config_entry_id: entryId,
+    device_id: "dev-ctrl",
+  });
+  const build = (optimizationRunning: string) =>
+    buildOmadaRows(
+      {
+        "binary_sensor.ctrl_wlan_optimization_running": {
+          entity_id: "binary_sensor.ctrl_wlan_optimization_running",
+          state: optimizationRunning,
+          attributes: { friendly_name: "Ctrl WLAN Optimization Running" },
+        },
+        "button.ctrl_start_wlan_optimization": {
+          entity_id: "button.ctrl_start_wlan_optimization",
+          state: "unknown",
+          attributes: { friendly_name: "Ctrl Start WLAN Optimization" },
+        },
+        "button.ctrl_reconnect_all_clients": {
+          entity_id: "button.ctrl_reconnect_all_clients",
+          state: "unknown",
+          attributes: { friendly_name: "Ctrl Reconnect All Clients" },
+        },
+        "sensor.ctrl_clients": {
+          entity_id: "sensor.ctrl_clients",
+          state: "113",
+          attributes: { unit_of_measurement: "clients", friendly_name: "Ctrl Clients" },
+        },
+      },
+      [
+        reg("binary_sensor.ctrl_wlan_optimization_running"),
+        reg("button.ctrl_start_wlan_optimization"),
+        reg("button.ctrl_reconnect_all_clients"),
+        reg("sensor.ctrl_clients"),
+      ],
+      [{ id: "dev-ctrl", name: "Virtual Omada Controller", model: "Omada Controller" }],
+      entryId,
+      false,
+      "MBps",
+    );
+
+  it("is a Controller row that stays online whatever the optimization sensor says", () => {
+    for (const running of ["on", "off"]) {
+      const [row] = build(running);
+      expect(row.deviceType, running).toBe("Controller");
+      expect(row.connection, running).toBe("Controller");
+      expect(row.connectionType, running).toBe("unknown");
+      expect(row.isOnline, running).toBe(true);
+      expect(row.deviceStatus, running).toBe("Connected");
+    }
   });
 });

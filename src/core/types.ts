@@ -78,4 +78,5 @@ export interface DeviceRegistryEntry {
   sw_version?: string;
   hw_version?: string;
   connections?: Array<[string, string]>;
+  via_device_id?: string | null;
 }

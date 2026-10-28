@@ -98,6 +98,11 @@ export interface MappedTrackerRow {
   memoryValue: number | null;
   uplink: string;
   firmwareLatest: string | null;
+  // tplink_router EasyMesh node trackers (integration v2.41+); null on client rows.
+  meshRole: "main" | "satellite" | null;
+  meshParentMac: string | null;
+  // Backhaul level in bars (1-3 on BE, up to 5 on AX), not dBm.
+  meshSignalLevel: number | null;
   deviceType?: string;
   deviceModel?: string;
   deviceFirmware?: string;
@@ -119,6 +124,9 @@ export const EMPTY_EXTENDED_ROW_FIELDS = {
   memoryValue: null,
   uplink: "—",
   firmwareLatest: null,
+  meshRole: null,
+  meshParentMac: null,
+  meshSignalLevel: null,
 } as const satisfies Partial<MappedTrackerRow>;
 
 export const toNumber = (value: unknown): number | null => {
@@ -157,7 +165,15 @@ export const normalizeConnection = (value: unknown): ConnectionType => {
   }
   if (text.includes("guest")) return "guest";
   if (text.includes("iot")) return "iot";
-  if (text.includes("wired") || text.includes("lan") || text.includes("ethernet")) return "wired";
+  // tplink_router mesh nodes report a cabled backhaul as "wire".
+  if (
+    text === "wire" ||
+    text.includes("wired") ||
+    text.includes("lan") ||
+    text.includes("ethernet")
+  ) {
+    return "wired";
+  }
   return "wifi";
 };
 
@@ -381,6 +397,7 @@ const inferConnectionLabel = (
   const normalizedConnection = connectionText.toLowerCase();
   if (wireTypeText === "wired") return "wired";
   if (
+    normalizedConnection === "wire" ||
     normalizedConnection.includes("wired") ||
     normalizedConnection.includes("ethernet") ||
     normalizedConnection.includes("lan")
@@ -447,12 +464,27 @@ const resolveThroughputRaw = (
   return kiloBytesPerSecond === null ? null : kiloBytesPerSecond * 1_000;
 };
 
+// Only tplink_router mesh node trackers publish is_main_router; client trackers never do.
+const resolveMeshNode = (attrs: Record<string, unknown>) => {
+  if (typeof attrs.is_main_router !== "boolean") return null;
+  const parentMac = plainApName(attrs.parent_mac);
+  return {
+    role: attrs.is_main_router ? ("main" as const) : ("satellite" as const),
+    parentMac,
+    signalLevel: toNumber(attrs.signal_level),
+    clientCount: toNumber(attrs.client_num),
+  };
+};
+
+const MESH_ROLE_LABELS = { main: "Main Router", satellite: "Satellite" } as const;
+
 export const mapTrackerStateToRow = (
   state: HassEntity,
   speedUnit: "MBps" | "Mbps",
   linkRateUnit: LinkRateUnitHint,
 ): MappedTrackerRow => {
   const attrs = state.attributes as Record<string, unknown>;
+  const meshNode = resolveMeshNode(attrs);
   const nameRaw = safeString(attrs.friendly_name ?? state.entity_id);
   const rawInterface = attrs.interface ?? attrs.client_type ?? attrs.clientType;
   const rawWireType = attrs.wire_type ?? attrs.wireType;
@@ -505,7 +537,9 @@ export const mapTrackerStateToRow = (
       ? (trafficDown ?? 0) + (trafficUp ?? 0)
       : toNumber(attrs.traffic_usage ?? attrs.total_traffic ?? attrs.traffic_total);
   const signalValue = resolveFirstNumber(attrs, SIGNAL_FIELD_ALIASES);
-  const deviceType = mapDeviceType(attrs.device_type ?? attrs.type, attrs.master);
+  const deviceType = meshNode
+    ? MESH_ROLE_LABELS[meshNode.role]
+    : mapDeviceType(attrs.device_type ?? attrs.type, attrs.master);
   const deviceModel = safeString(attrs.device_model ?? attrs.model ?? "—");
   const deviceFirmware = safeString(
     attrs.sw_version ?? attrs.firmware ?? attrs.firmware_version ?? "—",
@@ -569,9 +603,42 @@ export const mapTrackerStateToRow = (
     lastSeen: "—",
     lastSeenValue: null,
     ...EMPTY_EXTENDED_ROW_FIELDS,
+    ...(meshNode
+      ? {
+        meshRole: meshNode.role,
+        meshParentMac: meshNode.parentMac,
+        meshSignalLevel: meshNode.signalLevel,
+        clientCount:
+          meshNode.clientCount !== null ? formatNumber(meshNode.clientCount) : "—",
+        clientCountValue: meshNode.clientCount,
+        vendor: safeString(attrs.vendor ?? "—"),
+      }
+      : {}),
     deviceType,
     deviceModel,
     deviceFirmware,
     deviceStatus,
   };
+};
+
+// Node trackers name their uplink only by MAC; resolve it against the other node rows of the
+// same entry. A parent that is not tracked (disabled entity) keeps the raw MAC.
+export const applyMeshParentNames = (rows: MappedTrackerRow[]): MappedTrackerRow[] => {
+  if (!rows.some((row) => row.meshParentMac !== null)) return rows;
+  const nodesByMac = new Map(
+    rows
+      .filter((row) => row.meshRole !== null && row.macNormalized.length > 0)
+      .map((row) => [row.macNormalized, row] as const),
+  );
+  return rows.map((row) => {
+    if (row.meshParentMac === null) return row;
+    const parent = nodesByMac.get(normalizeMac(row.meshParentMac));
+    const name = parent ? parent.name : row.meshParentMac;
+    return {
+      ...row,
+      apName: name,
+      apNameValue: name,
+      apIsMainNode: parent?.meshRole === "main",
+    };
+  });
 };

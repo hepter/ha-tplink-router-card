@@ -1,5 +1,26 @@
 # Changelog
 
+## 0.7.0
+
+### Added
+
+- `tplink_router` EasyMesh node trackers (integration v2.41.0+, #16): node rows show the node they uplink through in `apName` (main router badge when the parent is the main router), the backhaul signal level as bars in `signal`, `Wired` for a cabled backhaul, and opt-in `deviceType` (`Main Router` / `Satellite`), `deviceModel` and `clients` columns.
+- `mlo` header action group (hidden by default) for the `tplink_router` WIFI MLO switches; the `tplink_router` E-WAN connect switch joins the hidden `wan` group.
+- `tplink_deco`: the `Refresh Deco status` button (integration v3.12.0+) is offered in the `scanning` group.
+- Notice with the number of `device_tracker` entities the integration disabled in the selected entry (Home Assistant 2026.11+ creates new trackers disabled for several integrations).
+- `tplink_omada`: the controller device (Home Assistant 2026.10+) is shown as a `Controller` row.
+- `omada_open_api` 1.12 auto-discovered trackers: RSSI, SNR and signal quality attributes are read, and `connectedTo` falls back to the client's parent device.
+- Action icons fall back to role and name based icons when an integration publishes no `icon` attribute.
+- Virtual lab: the BE230 mock serves the EasyMesh node list in the `tplinkrouterc6u` 5.37 shape (main router, wireless satellite, cabled two-hop satellite, disconnected satellite) and can run next to the `lab` profile on another port; the Omada mock serves the controller status and update info required by core `tplink_omada` on Home Assistant 2026.10+ and accepts form-encoded Open API token refreshes.
+
+### Fixed
+
+- `tplink_router` mesh nodes with a cabled backhaul (`connection_type: wire`) were counted as WiFi.
+- `tplink_router` WIFI MLO switches showed up in the WiFi group with the same icon and band badge as the regular WiFi switches.
+- Omada client groups whose tracker is disabled produced a row with a state guessed from the block switch. Access points, switches, gateways and controllers keep their sensor-based row.
+- The card reloads the device registry when entities of the selected entry point to a device it has not loaded yet.
+- `omada`: the controller device (WLAN optimization and Reconnect All Clients buttons) was listed as a WiFi client; it is now a `Controller` row.
+
 ## 0.6.0
 
 ### Added
