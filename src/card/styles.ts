@@ -1005,6 +1005,20 @@ export const cardStyles = css`
     opacity: 1;
   }
 
+  .linked-device-cell {
+    display: inline-flex;
+    align-items: baseline;
+    gap: 6px;
+    min-width: 0;
+    max-width: 100%;
+  }
+
+  .linked-device-integration {
+    color: var(--secondary-text-color);
+    font-size: 0.85em;
+    white-space: nowrap;
+  }
+
   .ap-cell {
     display: inline-flex;
     align-items: center;

@@ -79,4 +79,9 @@ export interface DeviceRegistryEntry {
   hw_version?: string;
   connections?: Array<[string, string]>;
   via_device_id?: string | null;
+  // Home Assistant 2026.10+ publishes a single `config_entry_id`; `config_entries` is kept.
+  config_entries?: string[];
+  config_entry_id?: string | null;
+  primary_config_entry?: string | null;
+  disabled_by?: string | null;
 }

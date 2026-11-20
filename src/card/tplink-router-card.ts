@@ -44,6 +44,12 @@ import {
   isOmadaIntegrationDomain,
 } from "../adapters/integration-profile";
 import type { MappedTrackerRow } from "../adapters/tplink";
+import {
+  buildLinkedDeviceIndex,
+  resolveDeviceIconTarget,
+  routerHardwareDevices,
+} from "../utils/linked-device";
+import type { LinkedDevice } from "../utils/linked-device";
 import type {
   ConfigEntry,
   DeviceRegistryEntry,
@@ -319,6 +325,15 @@ export class TplinkRouterCard extends LitElement {
   private _loaded = false;
   private _registryFailed = false;
   private _deviceRegistry: DeviceRegistryEntry[] = [];
+  // Every config entry, not only the supported ones: names the integration of a linked device.
+  private _entryDomainById = new Map<string, string>();
+  private _linkedDeviceCache?: {
+    devices: DeviceRegistryEntry[];
+    entities: EntityRegistryEntry[];
+    domains: Map<string, string>;
+    entryId: string;
+    index: Map<string, LinkedDevice>;
+  };
   private _filtersLoaded = false;
   private _showExportButton = false;
   private _speedTooltip: SpeedTooltipState | null = null;
@@ -833,6 +848,9 @@ export class TplinkRouterCard extends LitElement {
       }
 
       if (entries) {
+        this._entryDomainById = new Map(
+          entries.map((entry) => [entry.entry_id, entry.domain] as const),
+        );
         this._entries = entries.filter((entry) => SUPPORTED_ENTRY_DOMAINS.has(entry.domain));
         this._entries.forEach((entry) => ENTRY_TITLE_CACHE.set(entry.entry_id, entry.title));
       }
@@ -1570,18 +1588,24 @@ export class TplinkRouterCard extends LitElement {
           .map((item) => [item.entity_id, item.device_id as string] as const),
       );
 
+      const linkedDevices = this._getLinkedDeviceIndex(entryId);
       rows = applyMeshSignalScale(
         applyMeshParentNames(
-          entities.map((state) =>
-            ({
-              ...mapTrackerStateToRow(
-                state,
-                this._config?.speed_unit ?? "MBps",
-                linkRateUnit,
-              ),
+          entities.map((state) => {
+            const row = mapTrackerStateToRow(
+              state,
+              this._config?.speed_unit ?? "MBps",
+              linkRateUnit,
+            );
+            const linked = linkedDevices.get(row.macNormalized);
+            return {
+              ...row,
               deviceId: trackerDeviceIdByEntity.get(state.entity_id),
-            }) as RowData,
-          ),
+              linkedDeviceId: linked?.deviceId,
+              linkedDeviceName: linked ? linked.name || row.name : undefined,
+              linkedIntegration: linked?.integration,
+            } as RowData;
+          }),
         ),
       );
     }
@@ -1594,6 +1618,42 @@ export class TplinkRouterCard extends LitElement {
       return cachedRows;
     }
     return rows;
+  }
+
+  // The device of another integration that declares the MAC of a router client; rebuilt only
+  // when a registry or the selected entry changes.
+  private _getLinkedDeviceIndex(entryId: string): Map<string, LinkedDevice> {
+    const cache = this._linkedDeviceCache;
+    if (
+      cache &&
+      cache.devices === this._deviceRegistry &&
+      cache.entities === this._entityRegistry &&
+      cache.domains === this._entryDomainById &&
+      cache.entryId === entryId
+    ) {
+      return cache.index;
+    }
+    const index = buildLinkedDeviceIndex(
+      this._deviceRegistry,
+      this._entityRegistry,
+      this._entryDomainById,
+      entryId,
+      SUPPORTED_ENTRY_DOMAINS,
+    );
+    this._linkedDeviceCache = {
+      devices: this._deviceRegistry,
+      entities: this._entityRegistry,
+      domains: this._entryDomainById,
+      entryId,
+      index,
+    };
+    return index;
+  }
+
+  private _integrationTitle(domain: string | undefined): string {
+    if (!domain) return "";
+    const title = this.hass?.localize?.(`component.${domain}.title`);
+    return title && title.length > 0 ? title : domain;
   }
 
   private _isGlobalCommonAction(text: string) {
@@ -2463,6 +2523,11 @@ export class TplinkRouterCard extends LitElement {
       },
       { key: "vendor", label: t("columns.vendor"), sort: (row: RowData) => row.vendor },
       {
+        key: "linkedDevice",
+        label: t("columns.linkedDevice"),
+        sort: (row: RowData) => row.linkedDeviceName ?? null,
+      },
+      {
         key: "packetsSent",
         label: t("columns.packetsSent"),
         sort: (row: RowData) => row.packetsSentValue,
@@ -2649,6 +2714,11 @@ export class TplinkRouterCard extends LitElement {
 
     const allowedSortKeys = new Set(displayColumns.map((col) => col.key));
     const activeSorts = this._sorts.filter((sort) => allowedSortKeys.has(sort.key));
+
+    const routerHardware =
+      entryDomain === "tplink_router"
+        ? routerHardwareDevices(this._deviceRegistry, SUPPORTED_ENTRY_DOMAINS)
+        : new Set<string>();
 
     const sorted = [...filtered].sort((a, b) => {
       for (const sort of activeSorts) {
@@ -3229,8 +3299,24 @@ export class TplinkRouterCard extends LitElement {
               (row) => {
                 const isOffline = !row.isOnline;
                 const nameClickable = this._isNameClickable(row, entryDomain);
-                const showDeviceIcon = entryDomain === "tplink_router" && Boolean(row.deviceId);
-                const deviceTooltipLabel = t("actions.goToDevice", { name: row.name });
+                // A client tracker has no device of its own on Home Assistant 2026.11 (unless
+                // tracker_as_device is on): the icon opens the device of the integration that
+                // declares the same MAC. Mesh nodes keep the router's own device.
+                const linkedIntegration = this._integrationTitle(row.linkedIntegration);
+                const linkedDeviceLabel = row.linkedDeviceId
+                  ? linkedIntegration
+                    ? `${row.linkedDeviceName} (${linkedIntegration})`
+                    : `${row.linkedDeviceName}`
+                  : "";
+                const iconTarget = resolveDeviceIconTarget(
+                  row,
+                  Boolean(row.deviceId && routerHardware.has(row.deviceId)),
+                );
+                const nameDeviceId = iconTarget?.deviceId;
+                const showDeviceIcon = entryDomain === "tplink_router" && Boolean(nameDeviceId);
+                const deviceTooltipLabel = t("actions.goToDevice", {
+                  name: iconTarget?.linked ? linkedDeviceLabel : row.name,
+                });
                 const cells: Record<string, unknown> = {
                   name: nameClickable
                     ? html`
@@ -3241,7 +3327,7 @@ export class TplinkRouterCard extends LitElement {
                           >
                             ${row.name}
                           </button>
-                          ${showDeviceIcon && row.deviceId
+                          ${showDeviceIcon && nameDeviceId
                         ? html`
                                 <button
                                   class="name-device-link"
@@ -3249,7 +3335,7 @@ export class TplinkRouterCard extends LitElement {
                                   @click=${(ev: MouseEvent) => {
                             ev.preventDefault();
                             ev.stopPropagation();
-                            this._openDevicePage(row.deviceId as string);
+                            this._openDevicePage(nameDeviceId as string);
                           }}
                                 >
                                   <ha-icon icon="mdi:router-wireless"></ha-icon>
@@ -3373,6 +3459,28 @@ export class TplinkRouterCard extends LitElement {
                   ssid: row.ssid,
                   connectedTo: row.connectedTo,
                   vendor: row.vendor,
+                  linkedDevice: row.linkedDeviceId
+                    ? html`
+                        <span class="linked-device-cell">
+                          <button
+                            class="link"
+                            title=${t("actions.goToDevice", { name: linkedDeviceLabel })}
+                            @click=${(ev: MouseEvent) => {
+                              ev.preventDefault();
+                              ev.stopPropagation();
+                              this._openDevicePage(row.linkedDeviceId as string);
+                            }}
+                          >
+                            ${row.linkedDeviceName}
+                          </button>
+                          ${linkedIntegration
+                            ? html`<span class="linked-device-integration"
+                                >${linkedIntegration}</span
+                              >`
+                            : nothing}
+                        </span>
+                      `
+                    : "—",
                   clients: row.clientCount,
                   cpu: row.cpu,
                   memory: row.memory,

@@ -59,10 +59,19 @@ describe("integration column profiles", () => {
         "cpu",
         "memory",
         "uplink",
+        "linkedDevice",
       ].sort(),
     );
     for (const key of OPT_IN_COLUMN_KEYS) {
       expect(ALL_COLUMN_KEYS, key).toContain(key);
+    }
+  });
+
+  it("offers the linked device column to router client integrations only", () => {
+    expect(getAllowedColumnsForDomain("tplink_router")).toContain("linkedDevice");
+    expect(getAllowedColumnsForDomain("tplink_deco")).toContain("linkedDevice");
+    for (const domain of ["omada", "tplink_omada", "omada_open_api"]) {
+      expect(getAllowedColumnsForDomain(domain), domain).not.toContain("linkedDevice");
     }
   });
 

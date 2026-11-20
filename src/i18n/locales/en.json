@@ -81,6 +81,7 @@
     "connectedTo": "Connected To",
     "band": "Band",
     "vendor": "Vendor",
+    "linkedDevice": "Linked Device",
     "ssid": "SSID",
     "ip": "IP",
     "cpu": "CPU",

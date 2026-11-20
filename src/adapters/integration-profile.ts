@@ -68,6 +68,10 @@ export const OMADA_OPEN_API_DETAIL_COLUMN_KEYS = [
   "uplink",
 ] as const;
 
+// tplink_router / tplink_deco client rows: the Home Assistant device of another integration
+// that declares the client's MAC.
+export const ROUTER_CLIENT_LINK_COLUMN_KEYS = ["linkedDevice"] as const;
+
 export const TPLINK_DECO_EXTRA_COLUMN_KEYS = [
   "deviceType",
   "deviceModel",
@@ -77,6 +81,7 @@ export const TPLINK_DECO_EXTRA_COLUMN_KEYS = [
 const TPLINK_DECO_COLUMN_KEYS = [
   ...COMMON_COLUMN_KEYS,
   ...TPLINK_DECO_EXTRA_COLUMN_KEYS,
+  ...ROUTER_CLIENT_LINK_COLUMN_KEYS,
 ] as const;
 
 const OMADA_COLUMN_KEYS = [
@@ -127,6 +132,7 @@ export const OPT_IN_COLUMN_KEYS = [
   "cpu",
   "memory",
   "uplink",
+  ...ROUTER_CLIENT_LINK_COLUMN_KEYS,
 ] as const;
 
 export const BASE_COLUMN_KEYS = COMMON_COLUMN_KEYS;
@@ -136,6 +142,7 @@ export const ALL_COLUMN_KEYS = [
   ...OMADA_EXTRA_COLUMN_KEYS,
   ...OMADA_SHARED_DETAIL_COLUMN_KEYS,
   ...OMADA_OPEN_API_DETAIL_COLUMN_KEYS,
+  ...ROUTER_CLIENT_LINK_COLUMN_KEYS,
 ] as const;
 
 export type ColumnKey = (typeof ALL_COLUMN_KEYS)[number];
@@ -143,7 +150,11 @@ export type ColumnKey = (typeof ALL_COLUMN_KEYS)[number];
 // EasyMesh node trackers (tplink_router v2.41+) carry role, model and client count.
 const TPLINK_ROUTER_MESH_COLUMN_KEYS = ["deviceType", "deviceModel", "clients"] as const;
 
-const TPLINK_ROUTER_COLUMN_KEYS = [...COMMON_COLUMN_KEYS, ...TPLINK_ROUTER_MESH_COLUMN_KEYS] as const;
+const TPLINK_ROUTER_COLUMN_KEYS = [
+  ...COMMON_COLUMN_KEYS,
+  ...TPLINK_ROUTER_MESH_COLUMN_KEYS,
+  ...ROUTER_CLIENT_LINK_COLUMN_KEYS,
+] as const;
 
 // Opt-in only for these domains; other domains show the same keys by default.
 const DOMAIN_OPT_IN_COLUMN_KEYS: Partial<Record<SupportedIntegrationDomain, readonly ColumnKey[]>> = {

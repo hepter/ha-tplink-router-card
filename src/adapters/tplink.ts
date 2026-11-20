@@ -34,6 +34,10 @@ export type LinkRateUnitHint = "auto" | "kbps";
 export interface MappedTrackerRow {
   entity_id: string;
   deviceId?: string;
+  // Device of another integration that declares the client's MAC (tplink_router / tplink_deco).
+  linkedDeviceId?: string;
+  linkedDeviceName?: string;
+  linkedIntegration?: string;
   name: string;
   nameRaw: string;
   macNormalized: string;

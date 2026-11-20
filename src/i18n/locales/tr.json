@@ -81,6 +81,7 @@
     "connectedTo": "Bağlı Olduğu Cihaz",
     "band": "Band",
     "vendor": "Üretici",
+    "linkedDevice": "Bağlı Cihaz",
     "ssid": "SSID",
     "ip": "IP",
     "cpu": "CPU",

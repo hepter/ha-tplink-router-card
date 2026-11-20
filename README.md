@@ -95,6 +95,7 @@ Detailed matrix: `docs/integration-support.md`
 - `tplink_router`:
   - Full client table mapping from router tracker attributes.
   - EasyMesh: the optional `apName` column shows the node each client is attached to (integration v2.33.0+), clients on the main router get a badge. Add `apName` to `column_layout` to enable it.
+  - Linked device: when another integration declares the MAC of a client (same MAC in the device registry), the device icon next to the name opens that integration's device, and its tooltip names the device and the integration. A client tracker's own device is only the router side of the client (none on Home Assistant 2026.11 with tplink_router before 2.47, one described by the MAC alone from 2.47), so the icon either was missing or opened that router-side device. The router and mesh nodes keep their own device. The optional `linkedDevice` column shows the device name and its integration.
   - EasyMesh node trackers (integration v2.41.0+): every mesh node, the main router included, is a row. `apName` shows the node it uplinks through (`parent_mac` resolved to the node name, badge when that is the main router); `signal` shows the backhaul level as filled bars out of 3 behind a BE main router and out of 5 behind other routers (the integration reports 1-3 bars on BE, up to 5 on AX, no dBm; a level above 3 always switches to 5), coloured from red at level 1 to green at the full scale; a cabled backhaul shows `Wired`. Optional `deviceType` (`Main Router` / `Satellite`), `deviceModel` and `clients` (connected client count) fill these rows.
   - Header action groups: WiFi and Guest WiFi bands, reboot and data fetching are shown by default; IoT bands, MLO WiFi bands, VPN server/client, the LAN DHCP server switch and the E-WAN connect switch exist but stay hidden until listed in `header_action_groups` (all hold to confirm).
 
@@ -286,6 +287,9 @@ Optional keys, never part of the default layout, add them to `column_layout` whe
 - deviceType   # Main Router / Satellite
 - deviceModel  # node model
 - clients      # clients connected to the node
+
+# tplink_router / tplink_deco client rows
+- linkedDevice # device of another integration with the same MAC, and its integration
 
 # omada (HACS ha-omada) only
 - channel    # wireless channel
