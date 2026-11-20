@@ -93,36 +93,35 @@ export interface DeviceIconTarget {
   linked: boolean;
 }
 
-// Device opened by the icon next to a router client name. On Home Assistant 2026.11 a
-// tplink_router client tracker has no device of its own unless `tracker_as_device` is on, so
-// the device of the integration that declares the client's MAC is used. A mesh node, or a
-// tracker whose own device carries other entities of the router integration (sensors,
-// buttons...), keeps that device.
+// Device opened by the icon next to a router client name. A client tracker's own device is
+// only the router side of the client: none on Home Assistant 2026.11 with older tplink_router
+// versions, one described by the MAC alone with tplink_router 2.47+ (sometimes with a
+// "Blocked" switch). The device of the integration that declares the client's MAC is used
+// instead. The router itself and mesh nodes, whose device carries an identifier of the router
+// integration, keep their own device.
 export const resolveDeviceIconTarget = (
   row: {
     deviceId?: string;
     linkedDeviceId?: string;
     meshRole?: string | null;
   },
-  ownDeviceHasControls = false,
+  ownDeviceIsRouterHardware = false,
 ): DeviceIconTarget | null => {
   const own = row.deviceId ? { deviceId: row.deviceId, linked: false } : null;
   const linked = row.linkedDeviceId ? { deviceId: row.linkedDeviceId, linked: true } : null;
-  return row.meshRole || ownDeviceHasControls ? (own ?? linked) : (linked ?? own);
+  return row.meshRole || ownDeviceIsRouterHardware ? (own ?? linked) : (linked ?? own);
 };
 
-// Devices of a config entry that carry entities other than device trackers.
-export const devicesWithControls = (
-  entityRegistry: readonly EntityRegistryEntry[],
-  entryId: string,
+// Devices that carry an identifier of one of the given integrations: the router and its mesh
+// nodes. Client devices registered from a tracker carry the MAC connection only.
+export const routerHardwareDevices = (
+  devices: readonly DeviceRegistryEntry[],
+  routerDomains: ReadonlySet<string>,
 ): Set<string> =>
   new Set(
-    entityRegistry
-      .filter(
-        (entry) =>
-          entry.config_entry_id === entryId &&
-          entry.device_id &&
-          !entry.entity_id.startsWith("device_tracker."),
+    devices
+      .filter((device) =>
+        (device.identifiers ?? []).some(([domain]) => routerDomains.has(String(domain))),
       )
-      .map((entry) => entry.device_id as string),
+      .map((device) => device.id),
   );

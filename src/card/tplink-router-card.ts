@@ -46,8 +46,8 @@ import {
 import type { MappedTrackerRow } from "../adapters/tplink";
 import {
   buildLinkedDeviceIndex,
-  devicesWithControls,
   resolveDeviceIconTarget,
+  routerHardwareDevices,
 } from "../utils/linked-device";
 import type { LinkedDevice } from "../utils/linked-device";
 import type {
@@ -2715,9 +2715,9 @@ export class TplinkRouterCard extends LitElement {
     const allowedSortKeys = new Set(displayColumns.map((col) => col.key));
     const activeSorts = this._sorts.filter((sort) => allowedSortKeys.has(sort.key));
 
-    const routerControlDevices =
-      entryDomain === "tplink_router" && entryId
-        ? devicesWithControls(this._entityRegistry, entryId)
+    const routerHardware =
+      entryDomain === "tplink_router"
+        ? routerHardwareDevices(this._deviceRegistry, SUPPORTED_ENTRY_DOMAINS)
         : new Set<string>();
 
     const sorted = [...filtered].sort((a, b) => {
@@ -3310,7 +3310,7 @@ export class TplinkRouterCard extends LitElement {
                   : "";
                 const iconTarget = resolveDeviceIconTarget(
                   row,
-                  Boolean(row.deviceId && routerControlDevices.has(row.deviceId)),
+                  Boolean(row.deviceId && routerHardware.has(row.deviceId)),
                 );
                 const nameDeviceId = iconTarget?.deviceId;
                 const showDeviceIcon = entryDomain === "tplink_router" && Boolean(nameDeviceId);

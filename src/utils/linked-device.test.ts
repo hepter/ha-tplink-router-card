@@ -2,8 +2,8 @@ import { describe, expect, it } from "vitest";
 import type { DeviceRegistryEntry, EntityRegistryEntry } from "../core/types";
 import {
   buildLinkedDeviceIndex,
-  devicesWithControls,
   resolveDeviceIconTarget,
+  routerHardwareDevices,
 } from "./linked-device";
 
 const ROUTER_ENTRY = "router-entry";
@@ -170,23 +170,32 @@ describe("resolveDeviceIconTarget", () => {
     });
   });
 
-  it("keeps an own device that carries router controls", () => {
+  it("keeps the own device of router hardware", () => {
     expect(
       resolveDeviceIconTarget({ deviceId: "ap", linkedDeviceId: "upnp", meshRole: null }, true),
     ).toEqual({ deviceId: "ap", linked: false });
   });
 
-  it("lists the devices of an entry that carry more than trackers", () => {
-    const set = devicesWithControls(
+  it("finds router hardware by identifiers, not by the entities it carries", () => {
+    const set = routerHardwareDevices(
       [
-        entity("device_tracker.client", "client"),
-        entity("device_tracker.ap", "ap"),
-        entity("sensor.ap_clients", "ap"),
-        { entity_id: "sensor.other", platform: "x", device_id: "other", config_entry_id: "x" },
-      ].map((e) => ({ ...e, config_entry_id: e.config_entry_id ?? ROUTER_ENTRY })),
-      ROUTER_ENTRY,
+        // tplink_router 2.47+ client device: MAC only, even with a Blocked switch
+        {
+          id: "client",
+          config_entry_id: ROUTER_ENTRY,
+          connections: [["mac", "00:00:5e:00:53:01"]],
+        },
+        {
+          id: "satellite",
+          config_entry_id: ROUTER_ENTRY,
+          identifiers: [["tplink_router", "00-00-5E-00-53-B0"]],
+          connections: [["mac", "00:00:5e:00:53:b0"]],
+        },
+        { id: "other", identifiers: [["upnp", "uuid"]] },
+      ],
+      ROUTER_DOMAINS,
     );
-    expect([...set]).toEqual(["ap"]);
+    expect([...set]).toEqual(["satellite"]);
   });
 
   it("shows no icon without any device", () => {

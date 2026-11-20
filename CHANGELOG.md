@@ -16,7 +16,7 @@
 
 ### Fixed
 
-- `tplink_router`: on Home Assistant 2026.11 client rows lost the device icon next to their name. Home Assistant no longer attaches a router tracker to the device of another integration that declares the same MAC, and a `tplink_router` client tracker has no device of its own unless `tracker_as_device` is on. The icon now opens the device of the integration that declares the client's MAC, found in the device registry, and its tooltip names the device and the integration; mesh nodes keep the router's own device.
+- `tplink_router`: on Home Assistant 2026.11 client rows lost the device icon next to their name. Home Assistant no longer attaches a router tracker to the device of another integration that declares the same MAC, and a `tplink_router` client tracker has no device of its own unless `tracker_as_device` is on. tplink_router 2.47 then gave every client a device of its own, described by the MAC alone, so the icon came back but opened that router-side device. The icon now opens the device of the integration that declares the client's MAC, found in the device registry, and its tooltip names the device and the integration; the router and mesh nodes, whose device carries a tplink_router identifier, keep their own device.
 - `tplink_router` mesh nodes with a cabled backhaul (`connection_type: wire`) were counted as WiFi.
 - `tplink_router` WIFI MLO switches showed up in the WiFi group with the same icon and band badge as the regular WiFi switches.
 - Omada client groups whose tracker is disabled produced a row with a state guessed from the block switch. Access points, switches, gateways and controllers keep their sensor-based row.
